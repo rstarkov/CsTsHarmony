@@ -39,7 +39,9 @@ namespace CsTsApi
                 nullable = true;
                 type = type.GetGenericArguments()[0];
             }
-            if (type == typeof(string))
+            if (type == typeof(object))
+                result = "any";
+            else if (type == typeof(string))
                 result = "string";
             else if (type == typeof(int) || type == typeof(double) || type == typeof(decimal))
                 result = "number";
@@ -162,7 +164,7 @@ namespace CsTsApi
 
         public GenericControllerServiceBuilder(ApiDesc api) : base(api) { }
 
-        public virtual void AddService(Type controller)
+        public virtual ApiServiceDesc AddService(Type controller)
         {
             if (!IsSupportedController(controller))
                 throw new Exception($"Unsupported controller type: {controller.FullName}");
@@ -182,6 +184,8 @@ namespace CsTsApi
             }
 
             PostProcessService(service);
+
+            return service;
         }
 
         protected virtual void PostProcessService(ApiServiceDesc service)

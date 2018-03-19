@@ -57,6 +57,7 @@ namespace CsTsApi
                 m.UrlPath += (string) methodRoute.ReadProperty("Template");
             else // controllerRoute != null
                 m.UrlPath += (string) controllerRoute.ReadProperty("Template");
+            m.UrlPath = m.UrlPath.Substring(1);
 
             return m;
         }

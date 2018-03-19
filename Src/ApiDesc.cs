@@ -22,10 +22,13 @@ namespace CsTsApi
         public Dictionary<Type, ApiEnumDesc> Enums = new Dictionary<Type, ApiEnumDesc>();
     }
 
+    public enum SendCookies { Never = 1, SameOriginOnly, Always };
+
     public class ApiServiceDesc
     {
         public Type Controller;
         public string Name;
+        public SendCookies SendCookies = SendCookies.Never;
         public List<ApiMethodDesc> Methods = new List<ApiMethodDesc>();
     }
 
