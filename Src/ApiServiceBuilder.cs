@@ -41,6 +41,8 @@ namespace CsTsApi
             }
             if (type == typeof(object))
                 result = "any";
+            else if (type == typeof(void))
+                result = "void";
             else if (type == typeof(string))
                 result = "string";
             else if (type == typeof(int) || type == typeof(double) || type == typeof(decimal))
