@@ -8,6 +8,8 @@ namespace CsTsApi
 {
     public abstract class ApiServiceBuilder
     {
+        public List<TypeMapper> TypeMappers { get; set; } = new List<TypeMapper>();
+
         protected ApiDesc Api { get; private set; }
 
         public ApiServiceBuilder(ApiDesc api)
@@ -26,12 +28,10 @@ namespace CsTsApi
         ///     Maps a .NET type to a TypeScript type spec. Returns null if the specified type can't be mapped. The meaning of
         ///     non-mappable types varies depending on the caller; it might be treated as an error or as a signal to ignore a
         ///     certain property or skip a certain base type.</summary>
-        protected virtual string MapType(Type type)
+        protected virtual ApiTypeDesc MapType(Type type)
         {
             if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Task<>))
                 return MapType(type.GetGenericArguments()[0]);
-
-            string result;
 
             bool nullable = Api.StrictNulls ? !type.IsValueType : false;
             if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
@@ -39,47 +39,54 @@ namespace CsTsApi
                 nullable = true;
                 type = type.GetGenericArguments()[0];
             }
-            if (type == typeof(object))
-                result = "any";
+
+            var mapped = TypeMappers.Select(m => m.MapType(type)).FirstOrDefault(t => t != null);
+
+            if (mapped != null)
+            {
+                mapped.Nullable = nullable;
+                if (mapped.BasicType == null)
+                    throw new NotSupportedException("Type converter returning a non-basic-type is not fully supported."); // missing support in converter function body generator
+                foreach (var import in mapped.TypeMapper.GetImports())
+                    Api.Imports.Add(import);
+                return mapped;
+            }
             else if (type == typeof(void))
-                result = "void";
+                return new ApiTypeDesc { BasicType = "void" };
+            else if (type == typeof(object))
+                return new ApiTypeDesc { BasicType = "any", Nullable = nullable };
             else if (type == typeof(string))
-                result = "string";
+                return new ApiTypeDesc { BasicType = "string", Nullable = nullable };
             else if (type == typeof(int) || type == typeof(double) || type == typeof(decimal))
-                result = "number";
+                return new ApiTypeDesc { BasicType = "number", Nullable = nullable };
             else if (type == typeof(DateTime))
-                result = Api.DateTimeType;
+                return new ApiTypeDesc { BasicType = "string", Nullable = nullable };
             else if (type.IsArray)
             {
                 var elType = MapType(type.GetElementType());
                 if (elType == null)
                     return null;
-                result = "(" + elType + ")[]";
+                return new ApiTypeDesc { ArrayElementType = elType, Nullable = nullable };
             }
             else if (getIEnumerable(type, out var elT))
             {
                 var elType = MapType(elT);
                 if (elType == null)
                     return null;
-                result = "(" + elType + ")[]";
+                return new ApiTypeDesc { ArrayElementType = elType, Nullable = nullable };
             }
             else if (type.IsEnum)
             {
                 if (!AddEnum(type))
                     return null;
-                result = Api.Enums[type].TsName;
+                return new ApiTypeDesc { EnumType = Api.Enums[type], Nullable = nullable };
             }
             else
             {
                 if (!AddInterface(type))
                     return null;
-                result = Api.Interfaces[type].TsName;
+                return new ApiTypeDesc { InterfaceType = Api.Interfaces[type], Nullable = nullable };
             }
-
-            if (nullable)
-                result += " | null";
-
-            return result;
         }
 
         private bool getIEnumerable(Type type, out Type elType)
