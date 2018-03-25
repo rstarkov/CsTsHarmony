@@ -108,6 +108,8 @@ namespace CsTsApi
 
         protected void OutputService(TypeScriptWriter writer, ApiServiceDesc s)
         {
+            _convertersUsedFrom = new HashSet<TypeConverter>();
+            _convertersUsedTo = new HashSet<TypeConverter>();
             writer.WriteLine($"export class {s.Name}Service extends ApiServiceBase {{");
             writer.WriteLine();
             using (writer.Indent())
@@ -194,16 +196,22 @@ namespace CsTsApi
                 // Output type converters
                 foreach (var tc in _typeConverters.Values.Where(c => c != null).OrderBy(c => c.ForType.GetHash()))
                 {
-                    writer.WriteLine($"private {tc.FunctionName(toTypeScript: false)}(val: {tc.ForType.GetTypeScript()}): any {{");
-                    using (writer.Indent())
-                        tc.WriteFunctionBody(writer, false);
-                    writer.WriteLine("}");
-                    writer.WriteLine();
-                    writer.WriteLine($"private {tc.FunctionName(toTypeScript: true)}(val: any): {tc.ForType.GetTypeScript()} {{");
-                    using (writer.Indent())
-                        tc.WriteFunctionBody(writer, true);
-                    writer.WriteLine("}");
-                    writer.WriteLine();
+                    if (_convertersUsedFrom.Contains(tc))
+                    {
+                        writer.WriteLine($"private {tc.FunctionName(toTypeScript: false)}(val: {tc.ForType.GetTypeScript()}): any {{");
+                        using (writer.Indent())
+                            tc.WriteFunctionBody(writer, false);
+                        writer.WriteLine("}");
+                        writer.WriteLine();
+                    }
+                    if (_convertersUsedTo.Contains(tc))
+                    {
+                        writer.WriteLine($"private {tc.FunctionName(toTypeScript: true)}(val: any): {tc.ForType.GetTypeScript()} {{");
+                        using (writer.Indent())
+                            tc.WriteFunctionBody(writer, true);
+                        writer.WriteLine("}");
+                        writer.WriteLine();
+                    }
                 }
             }
             writer.WriteLine("}");
@@ -220,19 +228,31 @@ namespace CsTsApi
             // conversion function is called only if the value to be converted is truthy
             public Action<TypeScriptWriter, bool> WriteFunctionBody;
             public string FunctionName(bool toTypeScript) => "convert" + (toTypeScript ? "ToTs_" : "FromTs_") + ForType.GetHash();
+            public HashSet<TypeConverter> UsesConverters = new HashSet<TypeConverter>();
         }
 
         // If the key is present but the value is null, this means this type requires no conversion. The "Needed" properties on a converter keep track of whether anything uses it.
         private Dictionary<string, TypeConverter> _typeConverters = new Dictionary<string, TypeConverter>();
+        private HashSet<TypeConverter> _convertersUsedFrom, _convertersUsedTo;
 
         private void OutputTypeConversion(TypeScriptWriter writer, string lvalue, ApiTypeDesc type, bool toTypeScript)
         {
             var converter = getConverter(type);
             if (converter == null)
                 return;
+            MarkUsedConverters(converter, toTypeScript);
             writer.WriteLine($"if ({lvalue})");
             using (writer.Indent())
                 writer.WriteLine($"{lvalue} = this.{converter.FunctionName(toTypeScript)}({lvalue});");
+        }
+
+        private void MarkUsedConverters(TypeConverter converter, bool toTypeScript)
+        {
+            var set = !toTypeScript ? _convertersUsedFrom : _convertersUsedTo;
+            if (!set.Add(converter))
+                return;
+            foreach (var used in converter.UsesConverters)
+                MarkUsedConverters(used, toTypeScript);
         }
 
         private TypeConverter getConverter(ApiTypeDesc type)
@@ -269,6 +289,7 @@ namespace CsTsApi
                         converter = null;
                     else
                     {
+                        converter.UsesConverters.Add(elConverter);
                         converter.WriteFunctionBody = (writer, toTypeScript) =>
                         {
                             writer.WriteLine("for (let i = 0; i < val.length; i++)");
@@ -289,6 +310,8 @@ namespace CsTsApi
                         converter = null;
                     else
                     {
+                        foreach (var pc in propConverters)
+                            converter.UsesConverters.Add(pc.conv);
                         converter.WriteFunctionBody = (writer, toTypeScript) =>
                         {
                             foreach (var pc in propConverters)
