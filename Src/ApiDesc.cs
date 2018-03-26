@@ -34,15 +34,36 @@ namespace CsTsApi
         public List<ApiMethodDesc> Methods = new List<ApiMethodDesc>();
     }
 
+    public enum BodyEncoding
+    {
+        /// <summary>
+        ///     At most one body parameter is allowed, and is expected to be of type string, Blob, File or ArrayBuffer /
+        ///     ArrayBufferView.</summary>
+        Raw = 1,
+        /// <summary>At most one body parameter is allowed, and is encoded using JSON.stringify.</summary>
+        Json,
+        MultipartFormData,
+        FormUrlEncoded,
+    }
+
     public class ApiMethodDesc
     {
         public MethodInfo Method;
         public ApiServiceDesc Service;
         public string TsName;
         public ApiTypeDesc TsReturnType;
+        /// <summary>This URL is emitted in backticks and so may contain interpolated code.</summary>
         public string UrlPath;
         public List<ApiMethodParameterDesc> Parameters = new List<ApiMethodParameterDesc>();
         public List<string> HttpMethods = new List<string>();
+        public BodyEncoding BodyEncoding;
+    }
+
+    public enum ParameterLocation
+    {
+        UrlSegment = 1,
+        QueryString,
+        RequestBody,
     }
 
     public class ApiMethodParameterDesc
@@ -51,6 +72,7 @@ namespace CsTsApi
         public ApiMethodDesc Method;
         public string TsName;
         public ApiTypeDesc TsType;
+        public ParameterLocation Location;
     }
 
     public class ApiInterfaceDesc

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 
 namespace CsTsApi
 {
@@ -141,30 +140,12 @@ namespace CsTsApi
                         writer.WriteLine($"): {string.Format(ReturnTypeTemplate, method.TsReturnType.GetTypeScript())} {{");
                         using (writer.Indent())
                         {
-                            // Determine the URL
-                            var paramsBody = method.Parameters.ToDictionary(p => p.TsName);
-                            var url = Regex.Replace(method.UrlPath, @"{([a-zA-Z0-9]+)}", m =>
+                            var url = method.UrlPath;
+                            bool first2 = true;
+                            foreach (var p in method.Parameters.Where(p => p.Location == ParameterLocation.QueryString).OrderBy(p => p.TsName))
                             {
-                                if (!paramsBody.ContainsKey(m.Groups[1].Value))
-                                    throw new InvalidOperationException($"No matching method parameter found for URL segment \"{m.Value}\", method {method.Method.Name}, controller {s.Controller.FullName}");
-                                paramsBody.Remove(m.Groups[1].Value);
-                                return "${encodeURIComponent('' + " + m.Groups[1].Value + ")}";
-                            });
-                            // Remaining parameters must go into the query string or the body
-                            // TODO: Horrible hack: GET goes into URL, anything else goes into body
-                            if (httpMethod == "GET")
-                            {
-                                bool first2 = true;
-                                foreach (var p in paramsBody.OrderBy(p => p.Key))
-                                {
-                                    url += (first2 ? '?' : '&') + p.Key + "=${encodeURIComponent('' + " + p.Key + ")}";
-                                    first2 = false;
-                                }
-                            }
-                            else
-                            {
-                                if (paramsBody.Count > 1)
-                                    throw new Exception();
+                                url += (first2 ? '?' : '&') + p.TsName + "=${encodeURIComponent('' + " + p.TsName + ")}";
+                                first2 = false;
                             }
                             writer.WriteLine($"let url = this._hostname + `{url}`;");
 
@@ -172,13 +153,49 @@ namespace CsTsApi
                             foreach (var p in method.Parameters)
                                 OutputTypeConversion(writer, p.TsName, p.TsType, toTypeScript: false);
 
+                            // Build request body
+                            var bodyParams = method.Parameters.Where(p => p.Location == ParameterLocation.RequestBody).OrderBy(p => p.TsName).ToList();
+                            if (bodyParams.Count > 0 && httpMethod == "GET")
+                                throw new InvalidOperationException($"GET requests must not have any body parameters. Offending parameter: {bodyParams[0].TsName}, method {method.Method.Name}, controller {s.Controller.FullName}");
+                            if (bodyParams.Count > 1 && (method.BodyEncoding == BodyEncoding.Raw || method.BodyEncoding == BodyEncoding.Json))
+                                throw new InvalidOperationException($"The body encoding for this method allows for at most one body parameter. Offending parameters: [{bodyParams.Select(p => p.TsName).JoinString(", ")}], method {method.Method.Name}, controller {s.Controller.FullName}");
+                            var bodyCode = "";
+                            if (bodyParams.Count > 0)
+                            {
+                                if (method.BodyEncoding == BodyEncoding.Raw)
+                                {
+                                    bodyCode = $", body: {bodyParams[0].TsName}";
+                                }
+                                else if (method.BodyEncoding == BodyEncoding.Json)
+                                {
+                                    bodyCode = $", body: JSON.stringify({bodyParams[0].TsName}), headers: {{ 'Content-Type': 'application/json' }}";
+                                }
+                                else if (method.BodyEncoding == BodyEncoding.FormUrlEncoded)
+                                {
+                                    writer.WriteLine("let __body = new URLSearchParams();");
+                                    foreach (var bp in bodyParams)
+                                        writer.WriteLine($"__body.append('{bp.TsName}', '' + {bp.TsName});");
+                                    bodyCode = ", body: __body";
+                                }
+                                else if (method.BodyEncoding == BodyEncoding.MultipartFormData)
+                                {
+                                    writer.WriteLine("let __body = new FormData();");
+                                    foreach (var bp in bodyParams)
+                                        writer.WriteLine($"__body.append('{bp.TsName}', '' + {bp.TsName});");
+                                    bodyCode = ", body: __body";
+                                    throw new NotImplementedException("FormData encoding is not fully implemented."); // no support for file name, parameter is always stringified with no support for Blob
+                                }
+                                else
+                                    throw new Exception($"Unexpected {nameof(method.BodyEncoding)}: {method.BodyEncoding}");
+                            }
+
                             // Output call
                             var sendCookies = s.SendCookies == SendCookies.Always ? "include" : s.SendCookies == SendCookies.SameOriginOnly ? "same-origin" : s.SendCookies == SendCookies.Never ? "omit" : throw new Exception();
                             if (canDirectReturn)
                                 writer.Write("return ");
                             else
                                 writer.Write("let result = await ");
-                            writer.WriteLine($"this.{httpMethod}<{method.TsReturnType.GetTypeScript()}>(url, {{ credentials: '{sendCookies}' }});");
+                            writer.WriteLine($"this.{httpMethod}<{method.TsReturnType.GetTypeScript()}>(url, {{ credentials: '{sendCookies}'{bodyCode} }});");
 
                             if (!canDirectReturn)
                             {
