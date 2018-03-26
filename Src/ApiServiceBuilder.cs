@@ -59,6 +59,8 @@ namespace CsTsApi
                 return new ApiTypeDesc { BasicType = "string", Nullable = nullable };
             else if (type == typeof(int) || type == typeof(double) || type == typeof(decimal))
                 return new ApiTypeDesc { BasicType = "number", Nullable = nullable };
+            else if (type == typeof(bool))
+                return new ApiTypeDesc { BasicType = "boolean", Nullable = nullable };
             else if (type == typeof(DateTime))
                 return new ApiTypeDesc { BasicType = "string", Nullable = nullable };
             else if (type.IsArray)
