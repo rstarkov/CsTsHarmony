@@ -172,6 +172,7 @@ namespace CsTsApi
     public abstract class GenericControllerServiceBuilder : ApiServiceBuilder
     {
         public Func<Type, string> GetServiceName = (Type c) => c.Name.EndsWith("Controller") ? c.Name.Substring(0, c.Name.Length - 10) : c.Name;
+        public Func<MethodInfo, bool> MethodFilter = (_) => true;
 
         public GenericControllerServiceBuilder(ApiDesc api) : base(api) { }
 
@@ -186,7 +187,7 @@ namespace CsTsApi
             service.Controller = controller;
             service.Name = GetServiceName(controller);
 
-            foreach (var method in GetMethods(controller))
+            foreach (var method in GetMethods(controller).Where(MethodFilter))
             {
                 var desc = GetMethodDesc(service, method);
                 if (desc == null)
