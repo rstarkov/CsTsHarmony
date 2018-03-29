@@ -32,6 +32,8 @@ namespace CsTsApi
         {
             if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Task<>))
                 return MapType(type.GetGenericArguments()[0]);
+            if (type == typeof(Task))
+                return MapType(typeof(void));
 
             bool nullable = Api.StrictNulls ? !type.IsValueType : false;
             if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
