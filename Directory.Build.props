@@ -1,7 +1,0 @@
-<Project>
-  <PropertyGroup>
-    <OutputPath>$(MSBuildThisFileDirectory)\builds\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>$(MSBuildThisFileDirectory)\builds\$(Configuration)\obj-$(MSBuildProjectName)\</IntermediateOutputPath>
-    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)\builds\$(Configuration)\obj-$(MSBuildProjectName)\</BaseIntermediateOutputPath>
-  </PropertyGroup>
-</Project>
