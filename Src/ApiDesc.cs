@@ -8,8 +8,6 @@ public class ApiDesc
     public Dictionary<Type, TypeDesc> Types = new();
 }
 
-public enum SendCookies { Never = 1, SameOriginOnly, Always };
-
 public class ServiceDesc
 {
     public string TsName;
@@ -23,18 +21,6 @@ public class ServiceDesc
     {
         ControllerType = controllerType;
     }
-}
-
-public enum BodyEncoding
-{
-    /// <summary>
-    ///     At most one body parameter is allowed, and is expected to be of type string, Blob, File or ArrayBuffer /
-    ///     ArrayBufferView.</summary>
-    Raw = 1,
-    /// <summary>At most one body parameter is allowed, and is encoded using JSON.stringify.</summary>
-    Json,
-    MultipartFormData,
-    FormUrlEncoded,
 }
 
 public class MethodDesc
@@ -57,13 +43,6 @@ public class MethodDesc
     }
 }
 
-public enum ParameterLocation
-{
-    UrlSegment = 1,
-    QueryString,
-    RequestBody,
-}
-
 public class MethodParameterDesc
 {
     public string TsName;
@@ -77,6 +56,17 @@ public class MethodParameterDesc
     {
         Method = method;
     }
+}
+
+public class TypeRef
+{
+    public Type RawType;
+    public bool Nullable;
+    public bool Array;
+    public bool ArrayNullable;
+    public TypeDesc MappedType;
+
+    public override string ToString() => $"{RawType}{(Nullable ? "?" : "")}{(Array ? "[]" : "")}{(Array && ArrayNullable ? "?" : "")}";
 }
 
 public abstract class TypeDesc
@@ -93,32 +83,25 @@ public abstract class TypeDesc
     public virtual string TsReference(string fromNamespace) => fromNamespace == TsNamespace ? TsName : $"{TsNamespace}.{TsName}";
 }
 
-public class CompositeTypeDesc : TypeDesc
+public class BasicTypeDesc : TypeDesc
 {
-    public List<TypeRef> Extends = new();
-    public List<PropertyDesc> Properties = new();
+    public string TsType;
+    public override string ToString() => $"{TsType} ({RawType.Name})";
 
-    public override string ToString() => $"{RawType.FullName} (composite)";
-
-    public CompositeTypeDesc(Type rawType) : base(rawType)
+    public BasicTypeDesc(Type rawType, string tsType) : base(rawType)
     {
-        TsName = rawType.Name;
-        TsNamespace = rawType.Namespace;
+        TsType = tsType;
+        TsName = null;
+        TsNamespace = null;
     }
-}
 
-public class PropertyDesc
-{
-    public string Name;
-    public TypeRef Type;
-
-    public override string ToString() => $"{Name}: {Type}";
+    public override string TsReference(string fromNamespace) => TsType;
 }
 
 public class EnumTypeDesc : TypeDesc
 {
-    public bool IsFlags;
     public List<EnumValueDesc> Values = new();
+    public bool IsFlags;
 
     public override string ToString() => $"{RawType.FullName} (enum)";
 
@@ -144,28 +127,50 @@ public class EnumValueDesc
     }
 }
 
-public class TypeRef
+public class CompositeTypeDesc : TypeDesc
 {
-    public Type RawType;
-    public bool Nullable;
-    public bool Array;
-    public bool ArrayNullable;
-    public TypeDesc MappedType;
+    public List<PropertyDesc> Properties = new();
+    public List<TypeRef> Extends = new();
 
-    public override string ToString() => $"{RawType}{(Nullable ? "?" : "")}{(Array ? "[]" : "")}{(Array && ArrayNullable ? "?" : "")}";
-}
+    public override string ToString() => $"{RawType.FullName} (composite)";
 
-public class BasicTypeDesc : TypeDesc
-{
-    public string TsType;
-    public override string ToString() => $"{TsType} ({RawType.Name})";
-
-    public BasicTypeDesc(Type rawType, string tsType) : base(rawType)
+    public CompositeTypeDesc(Type rawType) : base(rawType)
     {
-        TsType = tsType;
-        TsName = null;
-        TsNamespace = null;
+        TsName = rawType.Name;
+        TsNamespace = rawType.Namespace;
     }
-
-    public override string TsReference(string fromNamespace) => TsType;
 }
+
+public class PropertyDesc
+{
+    public string Name;
+    public TypeRef Type;
+
+    public override string ToString() => $"{Name}: {Type}";
+}
+
+public enum BodyEncoding
+{
+    /// <summary>
+    ///     At most one body parameter is allowed, and is expected to be of type string, Blob, File or ArrayBuffer /
+    ///     ArrayBufferView.</summary>
+    Raw = 1,
+    /// <summary>At most one body parameter is allowed, and is encoded using JSON.stringify.</summary>
+    Json,
+    MultipartFormData,
+    FormUrlEncoded,
+}
+
+public enum ParameterLocation
+{
+    UrlSegment = 1,
+    QueryString,
+    RequestBody,
+}
+
+public enum SendCookies
+{
+    Never = 1,
+    SameOriginOnly,
+    Always,
+};

@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CsTsHarmony;
 
-public class ApiServiceBuilder
+public class ApiBuilder
 {
     public ApiDesc Api = new();
     public IgnoreConfig<Type> IgnoreControllers = new();
