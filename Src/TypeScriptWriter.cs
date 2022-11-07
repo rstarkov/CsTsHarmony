@@ -33,6 +33,7 @@ public class TypeScriptWriter : IDisposable
     {
         private TypeScriptWriter _owner;
         private bool _indent;
+
         public Indenter(TypeScriptWriter owner, bool indent)
         {
             _owner = owner;
@@ -40,6 +41,7 @@ public class TypeScriptWriter : IDisposable
             if (indent)
                 _owner._indentLevel++;
         }
+
         void IDisposable.Dispose()
         {
             if (_owner != null && _indent)

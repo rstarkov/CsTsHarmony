@@ -1,37 +1,28 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Security.Cryptography;
-using System.Text;
+﻿using System.Reflection;
 
 namespace CsTsHarmony;
 
 public class ApiDesc
 {
-    public HashSet<string> Imports = new HashSet<string>() { "import { ApiServiceBase } from './ApiLib';" };
-    /// <summary>
-    ///     If <c>true</c>, " | null" is appended to every nullable type. Otherwise, " | null" is only appended to
-    ///     nullable value types.</summary>
-    public bool StrictNulls = false;
-    /// <summary>
-    ///     Source assemblies for the API data transfer interfaces. When a method requires certain types, which may
-    ///     recursively require other types, this set of assemblies is used to determine whether to include said type.</summary>
-    public HashSet<Assembly> Assemblies = new HashSet<Assembly>();
-
-    public List<ApiServiceDesc> Services = new List<ApiServiceDesc>();
-    public Dictionary<Type, ApiInterfaceDesc> Interfaces = new Dictionary<Type, ApiInterfaceDesc>();
-    public Dictionary<Type, ApiEnumDesc> Enums = new Dictionary<Type, ApiEnumDesc>();
+    public List<ServiceDesc> Services = new();
+    public Dictionary<Type, TypeDesc> Types = new();
 }
 
 public enum SendCookies { Never = 1, SameOriginOnly, Always };
 
-public class ApiServiceDesc
+public class ServiceDesc
 {
-    public Type Controller;
-    public string Name;
-    public SendCookies SendCookies = SendCookies.Never;
-    public List<ApiMethodDesc> Methods = new List<ApiMethodDesc>();
+    public string TsName;
+    public Type ControllerType { get; }
+    public List<MethodDesc> Methods = new();
+    public SendCookies SendCookies = SendCookies.SameOriginOnly;
+
+    public override string ToString() => $"{ControllerType.Name} ({ControllerType.FullName})";
+
+    public ServiceDesc(Type controllerType)
+    {
+        ControllerType = controllerType;
+    }
 }
 
 public enum BodyEncoding
@@ -46,17 +37,24 @@ public enum BodyEncoding
     FormUrlEncoded,
 }
 
-public class ApiMethodDesc
+public class MethodDesc
 {
-    public MethodInfo Method;
-    public ApiServiceDesc Service;
     public string TsName;
-    public ApiTypeDesc TsReturnType;
-    /// <summary>This URL is emitted in backticks and so may contain interpolated code.</summary>
-    public string UrlPath;
-    public List<ApiMethodParameterDesc> Parameters = new List<ApiMethodParameterDesc>();
+    public MethodInfo Method { get; }
+    public ServiceDesc Service { get; }
+    public TypeRef ReturnType;
+    public List<MethodParameterDesc> Parameters = new();
+    public string UrlTemplate;
     public List<string> HttpMethods = new List<string>();
     public BodyEncoding BodyEncoding;
+
+    public override string ToString() => $"{Method.Name} on {Service}";
+
+    public MethodDesc(MethodInfo method, ServiceDesc service)
+    {
+        Method = method;
+        Service = service;
+    }
 }
 
 public enum ParameterLocation
@@ -66,75 +64,108 @@ public enum ParameterLocation
     RequestBody,
 }
 
-public class ApiMethodParameterDesc
+public class MethodParameterDesc
 {
-    public ParameterInfo Parameter;
-    public ApiMethodDesc Method;
     public string TsName;
-    public ApiTypeDesc TsType;
+    public string RequestName;
+    public MethodDesc Method { get; }
+    public TypeRef Type;
     public ParameterLocation Location;
+    public bool Optional;
+
+    public MethodParameterDesc(MethodDesc method)
+    {
+        Method = method;
+    }
 }
 
-public class ApiInterfaceDesc
+public abstract class TypeDesc
 {
-    public Type Type;
-    public string TsName;
-    public List<ApiInterfaceDesc> Extends = new List<ApiInterfaceDesc>();
-    public List<ApiPropertyDesc> Properties = new List<ApiPropertyDesc>();
+    public string TsName; // null if this type does not require a declaration to be emitted
+    public string TsNamespace;
+    public Type RawType { get; }
+
+    public TypeDesc(Type rawType)
+    {
+        RawType = rawType;
+    }
+
+    public virtual string TsReference(string fromNamespace) => fromNamespace == TsNamespace ? TsName : $"{TsNamespace}.{TsName}";
 }
 
-public class ApiPropertyDesc
+public class CompositeTypeDesc : TypeDesc
 {
-    public MemberInfo Member;
-    public string TsName;
-    public ApiTypeDesc TsType;
+    public List<TypeRef> Extends = new();
+    public List<PropertyDesc> Properties = new();
+
+    public override string ToString() => $"{RawType.FullName} (composite)";
+
+    public CompositeTypeDesc(Type rawType) : base(rawType)
+    {
+        TsName = rawType.Name;
+        TsNamespace = rawType.Namespace;
+    }
 }
 
-public class ApiEnumDesc
+public class PropertyDesc
 {
-    public Type Type;
+    public string Name;
+    public TypeRef Type;
+
+    public override string ToString() => $"{Name}: {Type}";
+}
+
+public class EnumTypeDesc : TypeDesc
+{
     public bool IsFlags;
-    public string TsName;
-    public List<ApiEnumValueDesc> Values = new List<ApiEnumValueDesc>();
+    public List<EnumValueDesc> Values = new();
+
+    public override string ToString() => $"{RawType.FullName} (enum)";
+
+    public EnumTypeDesc(Type rawType) : base(rawType)
+    {
+        TsName = rawType.Name;
+        TsNamespace = rawType.Namespace;
+    }
 }
 
-public class ApiEnumValueDesc
+public class EnumValueDesc
 {
-    public long NumericValue;
-    public string TsName;
+    public string Name;
+    public long Value;
+
+    public EnumTypeDesc Type { get; }
+
+    public override string ToString() => $"{Name} = {Value}";
+
+    public EnumValueDesc(EnumTypeDesc type)
+    {
+        Type = type;
+    }
 }
 
-public class ApiTypeDesc
+public class TypeRef
 {
-    public string BasicType;
-    public ApiInterfaceDesc InterfaceType;
-    public ApiEnumDesc EnumType;
-    public ApiTypeDesc ArrayElementType;
+    public Type RawType;
     public bool Nullable;
-    public TypeMapper TypeMapper;
+    public bool Array;
+    public bool ArrayNullable;
+    public TypeDesc MappedType;
 
-    public string GetTypeScript()
+    public override string ToString() => $"{RawType}{(Nullable ? "?" : "")}{(Array ? "[]" : "")}{(Array && ArrayNullable ? "?" : "")}";
+}
+
+public class BasicTypeDesc : TypeDesc
+{
+    public string TsType;
+    public override string ToString() => $"{TsType} ({RawType.Name})";
+
+    public BasicTypeDesc(Type rawType, string tsType) : base(rawType)
     {
-        string result;
-
-        if (BasicType != null)
-            result = BasicType;
-        else if (InterfaceType != null)
-            result = InterfaceType.TsName;
-        else if (EnumType != null)
-            result = EnumType.TsName;
-        else if (ArrayElementType != null)
-            result = "(" + ArrayElementType.GetTypeScript() + ")[]";
-        else
-            throw new Exception();
-
-        if (Nullable)
-            result += " | null";
-        return result;
+        TsType = tsType;
+        TsName = null;
+        TsNamespace = null;
     }
 
-    public string GetHash()
-    {
-        return MD5.Create().ComputeHash(Encoding.UTF8.GetBytes(GetTypeScript())).Take(8).Select(b => $"{b:x2}").JoinString();
-    }
+    public override string TsReference(string fromNamespace) => TsType;
 }

@@ -1,212 +1,234 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ActionConstraints;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using System.Reflection;
-using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CsTsHarmony;
 
-public abstract class ApiServiceBuilder
+public class ApiServiceBuilder
 {
-    public List<TypeMapper> TypeMappers { get; set; } = new List<TypeMapper>();
+    public ApiDesc Api = new();
+    public IgnoreConfig<Type> IgnoreControllers = new();
+    public IgnoreConfig<MethodInfo> IgnoreMethods = new();
+    public IgnoreConfig<Type> IgnoreTypes = new();
 
-    protected ApiDesc Api { get; private set; }
+    public Func<string, string> ControllerRenamer = name => name.Replace("Controller", "");
+    public List<ITypeMapper> TypeMappers = new() { new BasicTypeMapper(), new EnumTypeMapper(), new CompositeTypeMapper() };
+    public T TypeMapper<T>() where T : ITypeMapper => TypeMappers.OfType<T>().SingleOrDefault();
 
-    public ApiServiceBuilder(ApiDesc api)
+    public HashSet<Type> TypesToMap = new();
+
+    public List<string> DiagnosticLog = new();
+
+    public void AddControllers(IServiceProvider serviceProvider)
     {
-        Api = api;
+        AddControllers(serviceProvider.GetRequiredService<IActionDescriptorCollectionProvider>());
     }
 
-    /// <summary>
-    ///     Adds an assembly to the list of API source assemblies. See <see cref="ApiDesc.Assemblies"/> for more details.</summary>
-    public void AddAssembly(Assembly assy)
+    public void AddControllers(IActionDescriptorCollectionProvider provider)
     {
-        Api.Assemblies.Add(assy);
+        foreach (var cad in provider.ActionDescriptors.Items.Where(ad => ad.AttributeRouteInfo != null).OfType<ControllerActionDescriptor>())
+            addControllerActionDescriptor(cad);
     }
 
-    /// <summary>
-    ///     Maps a .NET type to a TypeScript type spec. Returns null if the specified type can't be mapped. The meaning of
-    ///     non-mappable types varies depending on the caller; it might be treated as an error or as a signal to ignore a
-    ///     certain property or skip a certain base type.</summary>
-    protected virtual ApiTypeDesc MapType(Type type)
+    private ServiceDesc addController(Type controllerType)
     {
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Task<>))
-            return MapType(type.GetGenericArguments()[0]);
-        if (type == typeof(Task))
-            return MapType(typeof(void));
+        if (!IgnoreControllers.Include(controllerType))
+            return null;
+        var svc = Api.Services.FirstOrDefault(s => s.ControllerType == controllerType);
+        if (svc != null)
+            return svc;
+        svc = new ServiceDesc(controllerType);
+        svc.TsName = ControllerRenamer(controllerType.Name);
+        Api.Services.Add(svc);
+        return svc;
+    }
 
-        bool nullable = Api.StrictNulls ? !type.IsValueType : false;
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
+    private static Dictionary<string, ParameterLocation> _paramLocations = new()
+    {
+        ["Path"] = ParameterLocation.UrlSegment,
+        ["Query"] = ParameterLocation.QueryString,
+        ["Body"] = ParameterLocation.RequestBody,
+    };
+
+    private MethodDesc addControllerActionDescriptor(ControllerActionDescriptor cad)
+    {
+        if (!IgnoreMethods.Include(cad.MethodInfo))
+            return null;
+        var controllerType = cad.ControllerTypeInfo.AsType();
+        var svc = addController(controllerType);
+        if (svc == null)
+            return null;
+        var md = new MethodDesc(cad.MethodInfo, svc)
         {
-            nullable = true;
-            type = type.GetGenericArguments()[0];
+            TsName = cad.ActionName,
+            HttpMethods = cad.ActionConstraints?.OfType<HttpMethodActionConstraint>().FirstOrDefault()?.HttpMethods.ToList(),
+            ReturnType = referenceType(cad.MethodInfo.ReturnType),
+            UrlTemplate = cad.AttributeRouteInfo.Template,
+            BodyEncoding = BodyEncoding.Json,
+        };
+        var badParam = cad.Parameters.FirstOrDefault(p => p.BindingInfo.BindingSource.IsFromRequest && !_paramLocations.ContainsKey(p.BindingInfo.BindingSource.Id));
+        if (badParam != null)
+        {
+            DiagnosticLog.Add($"Skipping method {cad.MethodInfo.Name} on {controllerType.FullName} because parameter {badParam.Name} has BindingSource.Id={badParam.BindingInfo.BindingSource.Id}");
+            return null;
+        }
+        md.Parameters = cad.Parameters
+            .Where(p => p.BindingInfo.BindingSource.IsFromRequest)
+            .Select(p => new MethodParameterDesc(md)
+            {
+                TsName = p.Name,
+                RequestName = p.Name,
+                Type = referenceType(p.ParameterType),
+                Location = _paramLocations[p.BindingInfo.BindingSource.Id],
+                Optional = p is ControllerParameterDescriptor cpd ? cpd.ParameterInfo.HasDefaultValue : false,
+            })
+            .ToList();
+        svc.Methods.Add(md);
+        return md;
+    }
+
+    private TypeRef referenceType(Type type)
+    {
+        // this is the only mechanism by which we create a TypeRef
+        var tr = new TypeRef();
+        tr.RawType = type;
+
+        if (tr.RawType == typeof(Task))
+            tr.RawType = typeof(void);
+        else if (tr.RawType.IsGenericType && tr.RawType.GetGenericTypeDefinition() == typeof(Task<>))
+            tr.RawType = tr.RawType.GetGenericArguments()[0];
+
+        if (tr.RawType.IsGenericType && tr.RawType.GetGenericTypeDefinition() == typeof(ActionResult<>))
+            tr.RawType = tr.RawType.GetGenericArguments()[0];
+        else if (tr.RawType == typeof(ActionResult) || tr.RawType.IsAssignableTo(typeof(IActionResult)) || tr.RawType.IsAssignableTo(typeof(IConvertToActionResult)))
+            tr.RawType = typeof(object);
+        // this could be made extensible
+
+        if (tr.RawType.IsArray)
+        {
+            tr.Array = true;
+            tr.ArrayNullable = false;
+            tr.RawType = tr.RawType.GetElementType();
+        }
+        else if (getIEnumerable(tr.RawType, out var elType))
+        {
+            tr.Array = true;
+            tr.ArrayNullable = false;
+            tr.RawType = elType;
+        }
+        // this could be made extensible
+
+        if (tr.RawType.IsGenericType && tr.RawType.GetGenericTypeDefinition() == typeof(Nullable<>))
+        {
+            tr.RawType = tr.RawType.GetGenericArguments()[0];
+            tr.Nullable = true;
         }
 
-        var mapped = TypeMappers.Select(m => m.MapType(type)).FirstOrDefault(t => t != null);
+        if (!Api.Types.ContainsKey(tr.RawType))
+            TypesToMap.Add(tr.RawType);
+        return tr;
 
-        if (mapped != null)
+        static bool getIEnumerable(Type type, out Type elType)
         {
-            mapped.Nullable = nullable;
-            if (mapped.BasicType == null)
-                throw new NotSupportedException("Type converter returning a non-basic-type is not fully supported."); // missing support in converter function body generator
-            foreach (var import in mapped.TypeMapper.GetImports())
-                Api.Imports.Add(import);
-            return mapped;
-        }
-        else if (type == typeof(void))
-            return new ApiTypeDesc { BasicType = "void" };
-        else if (type == typeof(object))
-            return new ApiTypeDesc { BasicType = "any", Nullable = nullable };
-        else if (type == typeof(string))
-            return new ApiTypeDesc { BasicType = "string", Nullable = nullable };
-        else if (type == typeof(int) || type == typeof(double) || type == typeof(decimal))
-            return new ApiTypeDesc { BasicType = "number", Nullable = nullable };
-        else if (type == typeof(bool))
-            return new ApiTypeDesc { BasicType = "boolean", Nullable = nullable };
-        else if (type == typeof(DateTime))
-            return new ApiTypeDesc { BasicType = "string", Nullable = nullable };
-        else if (type.IsArray)
-        {
-            var elType = MapType(type.GetElementType());
-            if (elType == null)
-                return null;
-            return new ApiTypeDesc { ArrayElementType = elType, Nullable = nullable };
-        }
-        else if (getIEnumerable(type, out var elT))
-        {
-            var elType = MapType(elT);
-            if (elType == null)
-                return null;
-            return new ApiTypeDesc { ArrayElementType = elType, Nullable = nullable };
-        }
-        else if (type.IsEnum)
-        {
-            if (!AddEnum(type))
-                return null;
-            return new ApiTypeDesc { EnumType = Api.Enums[type], Nullable = nullable };
-        }
-        else
-        {
-            if (!AddInterface(type))
-                return null;
-            return new ApiTypeDesc { InterfaceType = Api.Interfaces[type], Nullable = nullable };
+            if (type == typeof(string))
+            {
+                elType = null;
+                return false;
+            }
+
+            if (type.IsInterface && type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            {
+                elType = type.GetGenericArguments()[0];
+                return true;
+            }
+
+            var ts = type.GetInterfaces().Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>)).ToList();
+            elType = ts.FirstOrDefault()?.GetGenericArguments()[0];
+            return ts.Count == 1;
         }
     }
 
-    private bool getIEnumerable(Type type, out Type elType)
+    public void DiscoverTypes()
     {
-        if (type.IsInterface && type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+        while (TypesToMap.Any())
         {
-            elType = type.GetGenericArguments()[0];
-            return true;
-        }
-        var ts = type.GetInterfaces().Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>)).ToList();
-        elType = ts.FirstOrDefault()?.GetGenericArguments()[0];
-        return ts.Count == 1;
-    }
+            var type = TypesToMap.First();
+            TypesToMap.Remove(type);
 
-    /// <summary>
-    ///     Adds an enum for the specified type to the set of API declarations. See <see cref="AddInterface(Type)"/> for
-    ///     additional notes.</summary>
-    protected virtual bool AddEnum(Type type)
-    {
-        if (Api.Enums.ContainsKey(type))
-            return true;
-        if (!ShouldAddType(type))
-            return false;
-        var en = new ApiEnumDesc();
-        Api.Enums[type] = en;
-        en.Type = type;
-        en.TsName = type.FullName;
-        en.IsFlags = type.GetCustomAttribute<FlagsAttribute>() != null;
-        foreach (var val in Enum.GetValues(type))
-        {
-            var desc = new ApiEnumValueDesc();
-            desc.NumericValue = Convert.ToInt64(val);
-            desc.TsName = Enum.GetName(type, val);
-            en.Values.Add(desc);
-        }
-        return true;
-    }
-
-    /// <summary>
-    ///     Adds an interface for the specified type to the set of API declarations. May be called multiple times for the
-    ///     same type with no ill effects. Recursively adds all additional interfaces required by the one being added.
-    ///     Returns true if an interface will exist in TypeScript, or false when it's not possible or desirable to expose
-    ///     this type in TypeScript. This logic is based entirely on whether the type is contained in one of the
-    ///     whitelisted assemblies (see <see cref="ApiDesc.Assemblies"/> and <see cref="AddAssembly(Assembly)"/>), but can
-    ///     be fully customized by overriding this method.</summary>
-    protected virtual bool AddInterface(Type type)
-    {
-        if (Api.Interfaces.ContainsKey(type))
-            return true;
-        if (!ShouldAddType(type))
-            return false;
-        var iface = new ApiInterfaceDesc();
-        Api.Interfaces[type] = iface;
-        iface.Type = type;
-        iface.TsName = type.FullName;
-        if (type.BaseType != null && AddInterface(type.BaseType))
-            iface.Extends.Add(Api.Interfaces[type.BaseType]);
-        foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-        {
-            var ptype = MapType(prop.PropertyType);
-            if (ptype == null)
+            if (Api.Types.ContainsKey(type))
+                continue; // it was manually mapped by the caller before invoking MapTypes
+            if (!IgnoreTypes.Include(type))
                 continue;
-            iface.Properties.Add(new ApiPropertyDesc { Member = prop, TsType = ptype, TsName = prop.Name });
+
+            Api.Types[type] = null; // referenceType relies on the existence of this entry to prevent loops on reference cycles
+
+            foreach (var mapper in TypeMappers)
+            {
+                var result = mapper.MapType(type, referenceType);
+                if (result != null)
+                {
+                    Api.Types[type] = result;
+                    break;
+                }
+            }
+
+            // if we get here the type remains unmapped and a null entry remains in Api.Types
         }
-        foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
-        {
-            var ftype = MapType(field.FieldType);
-            if (ftype == null)
-                continue;
-            iface.Properties.Add(new ApiPropertyDesc { Member = field, TsType = ftype, TsName = field.Name });
-        }
-        return true;
     }
 
-    protected virtual bool ShouldAddType(Type type)
+    public void ApplyTypes()
     {
-        return Api.Assemblies.Contains(type.Assembly);
+        // Remove null values from Api.Types as that means the same as not being in the mapping at all
+        foreach (var kvp in Api.Types.Where(kvp => kvp.Value == null).ToList())
+            Api.Types.Remove(kvp.Key);
+        // Populate TypeRefs with the mapped types and ignore (remove) everything in the API that uses unmapped types
+        foreach (var s in Api.Services)
+        {
+            s.Methods.RemoveAll(m => !have(m.ReturnType) || m.Parameters.Any(p => !have(p.Type)));
+            foreach (var m in s.Methods)
+            {
+                m.ReturnType.MappedType = Api.Types[m.ReturnType.RawType];
+                foreach (var p in m.Parameters)
+                    p.Type.MappedType = Api.Types[p.Type.RawType];
+            }
+        }
+        foreach (var t in Api.Types.Values.OfType<CompositeTypeDesc>())
+        {
+            t.Properties.RemoveAll(p => !have(p.Type));
+            foreach (var p in t.Properties)
+                p.Type.MappedType = Api.Types[p.Type.RawType];
+            t.Extends.RemoveAll(e => !have(e));
+            foreach (var e in t.Extends)
+                e.MappedType = Api.Types[e.RawType];
+        }
+
+        bool have(TypeRef r) => Api.Types.ContainsKey(r.RawType);
     }
 }
 
-public abstract class GenericControllerServiceBuilder : ApiServiceBuilder
+public class IgnoreConfig<T> where T : MemberInfo
 {
-    public Func<Type, string> GetServiceName = (Type c) => c.Name.EndsWith("Controller") ? c.Name.Substring(0, c.Name.Length - 10) : c.Name;
-    public Func<MethodInfo, bool> MethodFilter = (_) => true;
+    public HashSet<T> Ignored = new();
+    public Func<T, bool> Filter = null;
+    public HashSet<string> Attributes = new() { "Newtonsoft.Json.JsonIgnoreAttribute" };
 
-    public GenericControllerServiceBuilder(ApiDesc api) : base(api) { }
-
-    public virtual ApiServiceDesc AddService(Type controller)
+    public bool Include(T value)
     {
-        if (!IsSupportedController(controller))
-            throw new Exception($"Unsupported controller type: {controller.FullName}");
-
-        var service = new ApiServiceDesc();
-        Api.Services.Add(service);
-        AddAssembly(controller.Assembly);
-        service.Controller = controller;
-        service.Name = GetServiceName(controller);
-
-        foreach (var method in GetMethods(controller).Where(MethodFilter))
+        if (Ignored.Contains(value))
+            return false;
+        if (value.CustomAttributes.Any(ca => Attributes.Contains(ca.AttributeType.FullName)))
         {
-            var desc = GetMethodDesc(service, method);
-            if (desc == null)
-                continue;
-            service.Methods.Add(desc);
+            Ignored.Add(value);
+            return false;
         }
-
-        PostProcessService(service);
-
-        return service;
+        if (Filter != null && !Filter(value))
+        {
+            Ignored.Add(value);
+            return false;
+        }
+        return true;
     }
-
-    protected virtual void PostProcessService(ApiServiceDesc service)
-    {
-    }
-
-    protected abstract bool IsSupportedController(Type controller);
-    protected abstract IEnumerable<MethodInfo> GetMethods(Type controller);
-    protected abstract ApiMethodDesc GetMethodDesc(ApiServiceDesc service, MethodInfo method);
 }
