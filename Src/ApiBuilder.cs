@@ -31,6 +31,24 @@ public class ApiBuilder
     {
         foreach (var cad in provider.ActionDescriptors.Items.Where(ad => ad.AttributeRouteInfo != null).OfType<ControllerActionDescriptor>())
             addControllerActionDescriptor(cad);
+
+        // Rename duplicate/overloaded methods
+        foreach (var s in Api.Services)
+        {
+            var existing = s.Methods.Select(m => m.TsName).ToHashSet();
+            foreach (var grp in s.Methods.GroupBy(g => g.TsName).Where(g => g.Count() > 1))
+            {
+                var methods = grp.ToList();
+                int num = 1;
+                foreach (var method in methods)
+                {
+                    while (existing.Contains($"{grp.Key}_{num}"))
+                        num++;
+                    method.TsName = $"{grp.Key}_{num}";
+                    existing.Add(method.TsName);
+                }
+            }
+        }
     }
 
     private ServiceDesc addController(Type controllerType)
