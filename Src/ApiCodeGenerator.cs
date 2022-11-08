@@ -199,25 +199,25 @@ public class ApiCodeGenerator
                         {
                             if (method.BodyEncoding == BodyEncoding.Raw)
                             {
-                                bodyCode = $", body: {bodyParams[0].TsName}";
+                                bodyCode = $", {{ body: {bodyParams[0].TsName} }}";
                             }
                             else if (method.BodyEncoding == BodyEncoding.Json)
                             {
-                                bodyCode = $", body: JSON.stringify({bodyParams[0].TsName}), headers: {{ 'Content-Type': 'application/json' }}";
+                                bodyCode = $", {{ body: JSON.stringify({bodyParams[0].TsName}), headers: {{ 'Content-Type': 'application/json' }} }}";
                             }
                             else if (method.BodyEncoding == BodyEncoding.FormUrlEncoded)
                             {
                                 writer.WriteLine("let __body = new URLSearchParams();");
                                 foreach (var bp in bodyParams)
                                     writer.WriteLine($"__body.append('{bp.TsName}', '' + {bp.TsName});");
-                                bodyCode = ", body: __body";
+                                bodyCode = ", { body: __body }";
                             }
                             else if (method.BodyEncoding == BodyEncoding.MultipartFormData)
                             {
                                 writer.WriteLine("let __body = new FormData();");
                                 foreach (var bp in bodyParams)
                                     writer.WriteLine($"__body.append('{bp.TsName}', '' + {bp.TsName});");
-                                bodyCode = ", body: __body";
+                                bodyCode = ", { body: __body }";
                                 throw new NotImplementedException("FormData encoding is not fully implemented."); // no support for file name, parameter is always stringified with no support for Blob
                             }
                             else
@@ -225,12 +225,11 @@ public class ApiCodeGenerator
                         }
 
                         // Output call
-                        var sendCookies = s.SendCookies == SendCookies.Always ? "include" : s.SendCookies == SendCookies.SameOriginOnly ? "same-origin" : s.SendCookies == SendCookies.Never ? "omit" : throw new Exception();
                         if (canDirectReturn)
                             writer.Write("return ");
                         else
                             writer.Write("let result = await ");
-                        writer.WriteLine($"this.{httpMethod}<{GetTypeScript(method.ReturnType, "")}>(url, {{ credentials: '{sendCookies}'{bodyCode} }});");
+                        writer.WriteLine($"this.{httpMethod}<{GetTypeScript(method.ReturnType, "")}>(url{bodyCode});");
 
                         if (!canDirectReturn)
                         {

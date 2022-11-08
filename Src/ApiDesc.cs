@@ -13,7 +13,6 @@ public class ServiceDesc
     public string TsName;
     public Type ControllerType { get; }
     public List<MethodDesc> Methods = new();
-    public SendCookies SendCookies = SendCookies.SameOriginOnly;
 
     public override string ToString() => $"{ControllerType.Name} ({ControllerType.FullName})";
 
@@ -167,10 +166,3 @@ public enum ParameterLocation
     QueryString,
     RequestBody,
 }
-
-public enum SendCookies
-{
-    Never = 1,
-    SameOriginOnly,
-    Always,
-};
