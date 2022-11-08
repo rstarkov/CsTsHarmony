@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HarmonyTests;
@@ -47,6 +48,12 @@ public class BasicStrictController : ControllerBase
 
     [HttpGet("/getenum")]
     public TestEnum GetEnum() => TestEnum.Blah;
+
+    [HttpGet("/getbinary")]
+    public IActionResult GetBinary()
+    {
+        return File(Convert.FromBase64String("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"), "image/webp");
+    }
 
     [HttpGet("qonly")] // relative path
     public FooResult QueryOnly(string q1, bool q2)

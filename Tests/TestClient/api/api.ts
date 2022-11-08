@@ -31,6 +31,7 @@ export class BasicStrictService extends ApiServiceBase {
 
     public endpoints = {
         BodyArray: (q1: string, qa: string[]): string => `barr?q1=${encodeURIComponent('' + q1)}`,
+        GetBinary: (): string => `getbinary`,
         GetEnum: (): string => `getenum`,
         GetInt: (): string => `getint`,
         GetInt0: (): string => `getint0`,
@@ -55,6 +56,7 @@ export class BasicStrictService extends ApiServiceBase {
         super(options);
 
         this.BodyArray = this.BodyArray.bind(this);
+        this.GetBinary = this.GetBinary.bind(this);
         this.GetEnum = this.GetEnum.bind(this);
         this.GetInt = this.GetInt.bind(this);
         this.GetInt0 = this.GetInt0.bind(this);
@@ -78,6 +80,11 @@ export class BasicStrictService extends ApiServiceBase {
     public BodyArray(q1: string, qa: string[]): Promise<string[]> {
         let url = this.endpoints.BodyArray(q1, qa);
         return this.GET<string[]>(url, { body: JSON.stringify(qa), headers: { 'Content-Type': 'application/json' } });
+    }
+
+    public GetBinary(): Promise<any> {
+        let url = this.endpoints.GetBinary();
+        return this.GET<any>(url);
     }
 
     public GetEnum(): Promise<HarmonyTests.TestEnum> {
