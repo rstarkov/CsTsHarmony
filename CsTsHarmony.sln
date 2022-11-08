@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CsTsHarmony", "Src\CsTsHarmony.csproj", "{EA645761-B79B-4EC2-8CF5-A1F9E24F8B1B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CsTsHarmony.TestServer", "Tests\TestServer\CsTsHarmony.TestServer.csproj", "{C0A10C8B-BED2-4D76-A4B5-573904352079}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{EA645761-B79B-4EC2-8CF5-A1F9E24F8B1B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EA645761-B79B-4EC2-8CF5-A1F9E24F8B1B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EA645761-B79B-4EC2-8CF5-A1F9E24F8B1B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C0A10C8B-BED2-4D76-A4B5-573904352079}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C0A10C8B-BED2-4D76-A4B5-573904352079}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C0A10C8B-BED2-4D76-A4B5-573904352079}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C0A10C8B-BED2-4D76-A4B5-573904352079}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
