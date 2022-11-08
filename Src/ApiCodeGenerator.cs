@@ -10,6 +10,7 @@ public class ApiCodeGenerator
 
     public Func<string, string> ServiceClassName = n => n + "Service";
     public string ServiceClassExtends = "ApiServiceBase";
+    public string ServiceOptionsType = "ApiServiceOptions";
     public string ReturnTypeTemplate = "Promise<{0}>";
 
     public ApiCodeGenerator(ApiDesc api)
@@ -71,11 +72,11 @@ public class ApiCodeGenerator
             foreach (var svc in Api.Services.OrderBy(s => s.TsName))
                 writer.WriteLine($"public readonly {svc.TsName}: {ServiceClassName(svc.TsName)};");
             writer.WriteLine();
-            writer.WriteLine("public constructor(basePath: string) {");
+            writer.WriteLine($"public constructor(options?: {ServiceOptionsType}) {{");
             using (writer.Indent())
             {
                 foreach (var svc in Api.Services.OrderBy(s => s.TsName))
-                    writer.WriteLine($"this.{svc.TsName} = new {ServiceClassName(svc.TsName)}(basePath);");
+                    writer.WriteLine($"this.{svc.TsName} = new {ServiceClassName(svc.TsName)}(options);");
             }
             writer.WriteLine("}");
         }
@@ -135,8 +136,6 @@ public class ApiCodeGenerator
         writer.WriteLine();
         using (writer.Indent())
         {
-            writer.WriteLine("protected _basePath: string;");
-            writer.WriteLine();
             writer.WriteLine("public endpoints = {");
             using (writer.Indent())
             {
@@ -150,16 +149,15 @@ public class ApiCodeGenerator
                             url += (first2 ? '?' : '&') + p.TsName + "=${encodeURIComponent('' + " + p.TsName + ")}";
                             first2 = false;
                         }
-                        writer.WriteLine($"{getMethodName(method, httpMethod)}: ({getMethodParams(method)}): string => this._basePath + `{url}`,");
+                        writer.WriteLine($"{getMethodName(method, httpMethod)}: ({getMethodParams(method)}): string => `{url}`,");
                     }
             }
             writer.WriteLine("};");
             writer.WriteLine();
-            writer.WriteLine("public constructor(basePath: string) {");
+            writer.WriteLine($"public constructor(options?: {ServiceOptionsType}) {{");
             using (writer.Indent())
             {
-                writer.WriteLine("super();");
-                writer.WriteLine("this._basePath = (basePath.substr(-1) == '/') ? basePath : basePath + '/';");
+                writer.WriteLine("super(options);");
                 writer.WriteLine();
 
                 foreach (var method in s.Methods.OrderBy(m => m.TsName))
