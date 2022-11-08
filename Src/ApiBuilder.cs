@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.ActionConstraints;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using System.Reflection;
+using Microsoft.AspNetCore.Routing.Template;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CsTsHarmony;
@@ -84,7 +85,7 @@ public class ApiBuilder
             TsName = cad.ActionName,
             HttpMethods = cad.ActionConstraints?.OfType<HttpMethodActionConstraint>().FirstOrDefault()?.HttpMethods.ToList(),
             ReturnType = referenceType(cad.MethodInfo.ReturnType),
-            UrlTemplate = cad.AttributeRouteInfo.Template,
+            UrlTemplate = TemplateParser.Parse(cad.AttributeRouteInfo.Template),
             BodyEncoding = BodyEncoding.Json,
         };
         var badParam = cad.Parameters.FirstOrDefault(p => p.BindingInfo.BindingSource.IsFromRequest && !_paramLocations.ContainsKey(p.BindingInfo.BindingSource.Id));

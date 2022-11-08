@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using Microsoft.AspNetCore.Routing.Template;
 
 namespace CsTsHarmony;
 
@@ -29,7 +30,7 @@ public class MethodDesc
     public ServiceDesc Service { get; }
     public TypeRef ReturnType;
     public List<MethodParameterDesc> Parameters = new();
-    public string UrlTemplate;
+    public RouteTemplate UrlTemplate; // if we were going for full abstraction this would have to be wrapped into a *Desc class but we're not
     public List<string> HttpMethods = new List<string>();
     public BodyEncoding BodyEncoding;
 

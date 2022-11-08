@@ -49,9 +49,15 @@ test('query only', async ({ request }) => {
 
 test('query and route', async ({ request }) => {
     let svc = new Services({ request });
-    expect(svc.BasicStrict.endpoints.QueryAndRoute("", 47, false, "25")).toEqual('qandr/47/foo/25/bar?q1=&q2=false');
-    expect(await svc.BasicStrict.QueryAndRoute("", 47, false, "25")).toEqual({ q1: "", r1: 47, q2: false, r2: "25" });
+    expect(svc.BasicStrict.endpoints.QueryAndRoute("asd", 47, false, "25")).toEqual('qandr/47/foo/25/bar?q1=asd&q2=false');
+    expect(await svc.BasicStrict.QueryAndRoute("asd", 47, false, "25")).toEqual({ q1: "asd", r1: 47, q2: false, r2: "25" });
 });
+
+// test('query and route 2', async ({ request }) => { // must be optional
+//     let svc = new Services({ request });
+//     expect(svc.BasicStrict.endpoints.QueryAndRoute("", 47, false, "25")).toEqual('qandr/47/foo/25/bar?q1=&q2=false');
+//     expect(await svc.BasicStrict.QueryAndRoute("", 47, false, "25")).toEqual({ q1: "", r1: 47, q2: false, r2: "25" });
+// });
 
 test('query array', async ({ request }) => {
     let svc = new Services({ request });
@@ -65,17 +71,17 @@ test('body array', async ({ request }) => {
     expect(await svc.BasicStrict.BodyArray("foo", ["bar", "", "baz"])).toEqual(["foo", "bar", "", "baz"]);
 });
 
-test('query route body 1', async ({ request }) => {
+test('query route body', async ({ request }) => {
     let svc = new Services({ request });
-    expect(svc.BasicStrict.endpoints.QueryRouteBody("Foo", 25, true, "baZ")).toEqual('qandrandb/baZ');
+    expect(svc.BasicStrict.endpoints.QueryRouteBody("Foo", 25, true, "baZ")).toEqual('qandrandb/baZ?q1=Foo&q2=true');
     expect(await svc.BasicStrict.QueryRouteBody("Foo", 25, true, "baZ")).toEqual({ q1: "Foo", r1: 25, q2: true, r2: "baZ" });
 });
 
-test('query route body 2', async ({ request }) => {
-    let svc = new Services({ request });
-    expect(svc.BasicStrict.endpoints.QueryRouteBody("Foo", 25, true, "")).toEqual('qandrandb/');
-    expect(await svc.BasicStrict.QueryRouteBody("Foo", 25, true, "")).toEqual({ q1: "Foo", r1: 25, q2: true, r2: "" });
-});
+// test('query route body 2', async ({ request }) => { // must be optional
+//     let svc = new Services({ request });
+//     expect(svc.BasicStrict.endpoints.QueryRouteBody("Foo", 25, true, "")).toEqual('qandrandb/?q1=Foo&q2=true');
+//     expect(await svc.BasicStrict.QueryRouteBody("Foo", 25, true, "")).toEqual({ q1: "Foo", r1: 25, q2: true, r2: "" });
+// });
 
 test('model body', async ({ request }) => {
     let svc = new Services({ request });

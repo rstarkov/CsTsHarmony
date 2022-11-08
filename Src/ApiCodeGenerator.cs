@@ -142,14 +142,31 @@ public class ApiCodeGenerator
                 foreach (var method in s.Methods.OrderBy(m => m.TsName))
                     foreach (var httpMethod in method.HttpMethods.Order())
                     {
-                        var url = method.UrlTemplate;
-                        bool first2 = true;
+                        var url = new StringBuilder();
+                        bool first = true;
+                        foreach (var segment in method.UrlTemplate.Segments)
+                        {
+                            if (first)
+                                first = false;
+                            else
+                                url.Append('/');
+                            if (!segment.IsSimple)
+                                throw new NotImplementedException(); // need a test case to implement this
+                            if (segment.Parts[0].IsLiteral)
+                                url.Append(segment.Parts[0].Text);
+                            else if (segment.Parts[0].IsParameter)
+                                url.Append("${encodeURIComponent('' + " + segment.Parts[0].Name + ")}");
+                            else
+                                throw new NotImplementedException(); // need a test case to implement this
+                        }
+                        first = true;
                         foreach (var p in method.Parameters.Where(p => p.Location == ParameterLocation.QueryString).OrderBy(p => p.TsName))
                         {
-                            url += (first2 ? '?' : '&') + p.TsName + "=${encodeURIComponent('' + " + p.TsName + ")}";
-                            first2 = false;
+                            url.Append(first ? '?' : '&');
+                            url.Append(p.TsName + "=${encodeURIComponent('' + " + p.TsName + ")}");
+                            first = false;
                         }
-                        writer.WriteLine($"{getMethodName(method, httpMethod)}: ({getMethodParams(method)}): string => `{url}`,");
+                        writer.WriteLine($"{getMethodName(method, httpMethod)}: ({getMethodParams(method)}): string => `{url.ToString()}`,");
                     }
             }
             writer.WriteLine("};");
