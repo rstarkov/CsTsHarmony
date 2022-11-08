@@ -19,22 +19,23 @@ export class ApiServiceBase {
         this.request = options.request;
     }
 
-    protected static async parse<T>(resp: APIResponse): Promise<T> {
-        if (resp.status() == 204) // WebAPI returns 204 for void-returning methods, and such a response can't be parsed by resp.json()
-            return undefined as any;
-        let json: any = await resp.json();
-        if (resp.status() == 200)
-            return json;
-        throw new Error();
+    protected static async parse(resp: APIResponse): Promise<any> {
+        if (resp.status() < 200 || resp.status() >= 300)
+            throw new Error();
+        if (resp.headers()['content-length'] == '0')
+            return undefined;
+        if (resp.headers()['content-type']?.startsWith('application/json'))
+            return await resp.json();
+        return await resp.text();
     }
 
     protected async GET<T>(url: string, init?: RequestArgs): Promise<T> {
         let resp = await this.request.get(url, { data: init?.body, headers: init?.headers });
-        return ApiServiceBase.parse<T>(resp);
+        return ApiServiceBase.parse(resp) as any;
     }
 
     protected async POST<T>(url: string, init?: RequestArgs): Promise<T> {
         let resp = await this.request.post(url, { data: init?.body, headers: init?.headers });
-        return ApiServiceBase.parse<T>(resp);
+        return ApiServiceBase.parse(resp) as any;
     }
 }
