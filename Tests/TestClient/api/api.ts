@@ -30,7 +30,7 @@ export class Services {
 export class BasicStrictService extends ApiServiceBase {
 
     public endpoints = {
-        BodyArray: (q1: string, qa: string[]): string => `barr?q1=${encodeURIComponent('' + q1)}`,
+        BodyArray: (q1: string): string => `barr?q1=${encodeURIComponent('' + q1)}`,
         GetBinary: (): string => `getbinary`,
         GetEnum: (): string => `getenum`,
         GetInt: (): string => `getint`,
@@ -40,7 +40,7 @@ export class BasicStrictService extends ApiServiceBase {
         GetModelArr0: (): string => `getmodelarr0`,
         GetString: (): string => `getstring`,
         GetString0: (): string => `getstring0`,
-        ModelBody: (foo: HarmonyTests.FooResult): string => `modelbody`,
+        ModelBody: (): string => `modelbody`,
         ModelQuery: (foo: HarmonyTests.FooResult): string => `modelquery?foo=${encodeURIComponent('' + foo)}`,
         Overloaded1_1: (p1: string): string => `overloaded1a?p1=${encodeURIComponent('' + p1)}`,
         Overloaded1_2: (p1: string, p2: number): string => `overloaded1b?p1=${encodeURIComponent('' + p1)}&p2=${encodeURIComponent('' + p2)}`,
@@ -48,7 +48,7 @@ export class BasicStrictService extends ApiServiceBase {
         QueryAndRoute: (q1: string, r1: number, q2: boolean, r2: string): string => `qandr/${encodeURIComponent('' + r1)}/foo/${encodeURIComponent('' + r2)}/bar?q1=${encodeURIComponent('' + q1)}&q2=${encodeURIComponent('' + q2)}`,
         QueryArray: (q1: string, qa: string[]): string => `qarr?q1=${encodeURIComponent('' + q1)}&qa=${encodeURIComponent('' + qa)}`,
         QueryOnly: (q1: string, q2: boolean): string => `BasicStrict/qonly?q1=${encodeURIComponent('' + q1)}&q2=${encodeURIComponent('' + q2)}`,
-        QueryRouteBody: (q1: string, r1: number, q2: boolean, r2: string): string => `qandrandb/${encodeURIComponent('' + r2)}?q1=${encodeURIComponent('' + q1)}&q2=${encodeURIComponent('' + q2)}`,
+        QueryRouteBody: (q1: string, q2: boolean, r2: string): string => `qandrandb/${encodeURIComponent('' + r2)}?q1=${encodeURIComponent('' + q1)}&q2=${encodeURIComponent('' + q2)}`,
         SameName1Get: (): string => `samename`,
         SameName2Post: (): string => `samename`,
     };
@@ -80,7 +80,7 @@ export class BasicStrictService extends ApiServiceBase {
     }
 
     public BodyArray(q1: string, qa: string[]): Promise<string[]> {
-        let url = this.endpoints.BodyArray(q1, qa);
+        let url = this.endpoints.BodyArray(q1);
         return this.fetchJson(url, { method: 'GET', body: JSON.stringify(qa), headers: { 'Content-Type': 'application/json' } }) as Promise<string[]>;
     }
 
@@ -130,7 +130,7 @@ export class BasicStrictService extends ApiServiceBase {
     }
 
     public ModelBody(foo: HarmonyTests.FooResult): Promise<HarmonyTests.FooResult> {
-        let url = this.endpoints.ModelBody(foo);
+        let url = this.endpoints.ModelBody();
         return this.fetchJson(url, { method: 'POST', body: JSON.stringify(foo), headers: { 'Content-Type': 'application/json' } }) as Promise<HarmonyTests.FooResult>;
     }
 
@@ -170,7 +170,7 @@ export class BasicStrictService extends ApiServiceBase {
     }
 
     public QueryRouteBody(q1: string, r1: number, q2: boolean, r2: string): Promise<HarmonyTests.FooResult> {
-        let url = this.endpoints.QueryRouteBody(q1, r1, q2, r2);
+        let url = this.endpoints.QueryRouteBody(q1, q2, r2);
         return this.fetchJson(url, { method: 'GET', body: JSON.stringify(r1), headers: { 'Content-Type': 'application/json' } }) as Promise<HarmonyTests.FooResult>;
     }
 

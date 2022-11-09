@@ -72,13 +72,13 @@ test('query array', async ({ request }) => {
 
 test('body array', async ({ request }) => {
     let svc = new Services({ request });
-    expect(svc.BasicStrict.endpoints.BodyArray("foo", ["bar", "", "baz"])).toEqual('barr?q1=foo');
+    expect(svc.BasicStrict.endpoints.BodyArray("foo")).toEqual('barr?q1=foo');
     expect(await svc.BasicStrict.BodyArray("foo", ["bar", "", "baz"])).toEqual(["foo", "bar", "", "baz"]);
 });
 
 test('query route body', async ({ request }) => {
     let svc = new Services({ request });
-    expect(svc.BasicStrict.endpoints.QueryRouteBody("Foo", 25, true, "baZ")).toEqual('qandrandb/baZ?q1=Foo&q2=true');
+    expect(svc.BasicStrict.endpoints.QueryRouteBody("Foo", true, "baZ")).toEqual('qandrandb/baZ?q1=Foo&q2=true');
     expect(await svc.BasicStrict.QueryRouteBody("Foo", 25, true, "baZ")).toEqual({ q1: "Foo", r1: 25, q2: true, r2: "baZ" });
 });
 
@@ -91,7 +91,7 @@ test('query route body', async ({ request }) => {
 test('model body', async ({ request }) => {
     let svc = new Services({ request });
     let model: HarmonyTests.FooResult = { q1: "fwih", q2: true, r1: 123, r2: "fskh" };
-    expect(svc.BasicStrict.endpoints.ModelBody(model)).toEqual('modelbody');
+    expect(svc.BasicStrict.endpoints.ModelBody()).toEqual('modelbody');
     expect(await svc.BasicStrict.ModelBody(model)).toEqual(model);
 });
 

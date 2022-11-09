@@ -168,7 +168,7 @@ public class ApiCodeGenerator
                             url.Append(p.TsName + "=${encodeURIComponent('' + " + p.TsName + ")}");
                             first = false;
                         }
-                        writer.WriteLine($"{getMethodName(method, httpMethod)}: ({getMethodParams(method)}): string => `{url.ToString()}`,");
+                        writer.WriteLine($"{getMethodName(method, httpMethod)}: ({getMethodParams(method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString))}): string => `{url.ToString()}`,");
                     }
             }
             writer.WriteLine("};");
@@ -195,11 +195,11 @@ public class ApiCodeGenerator
                     bool canDirectReturn = true;
 #endif
                     writer.Write($"public {(canDirectReturn ? "" : "async ")}{getMethodName(method, httpMethod)}(");
-                    writer.Write(getMethodParams(method));
+                    writer.Write(getMethodParams(method.Parameters));
                     writer.WriteLine($"): {string.Format(ReturnTypeTemplate, GetTypeScript(method.ReturnType, ""))} {{");
                     using (writer.Indent())
                     {
-                        writer.WriteLine($"let url = this.endpoints.{getMethodName(method, httpMethod)}({method.Parameters.Select(p => p.TsName).JoinString(", ")});");
+                        writer.WriteLine($"let url = this.endpoints.{getMethodName(method, httpMethod)}({method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString).Select(p => p.TsName).JoinString(", ")});");
 
 #if false
                         // Output parameter type conversions
@@ -294,11 +294,11 @@ public class ApiCodeGenerator
         return method.TsName + (method.HttpMethods.Count == 1 ? "" : httpMethod.Substring(0, 1) + httpMethod.Substring(1).ToLower());
     }
 
-    private string getMethodParams(MethodDesc method)
+    private string getMethodParams(IEnumerable<MethodParameterDesc> parameters)
     {
         var sb = new StringBuilder();
         bool first = true;
-        foreach (var p in method.Parameters)
+        foreach (var p in parameters)
         {
             if (!first)
                 sb.Append(", ");
