@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { Services } from '../api';
 
+test('post void', async ({ request }) => {
+    let svc = new Services({ request });
+    expect(await svc.BasicStrict.PostVoid()).toEqual(undefined);
+});
+
 test('get model', async ({ request }) => {
     let svc = new Services({ request });
     expect(await svc.BasicStrict.GetModel()).toEqual({ q1: "foo", r1: 123, q2: true, r2: "" });

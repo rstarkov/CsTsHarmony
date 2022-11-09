@@ -19,6 +19,11 @@ public enum TestEnum { Foo = 1, Blah }
 [Route("[controller]")]
 public class BasicStrictController : ControllerBase
 {
+    [HttpPost("/void")]
+    public void PostVoid()
+    {
+    }
+
     [HttpGet("/getmodel")]
     public FooResult GetModel()
     {

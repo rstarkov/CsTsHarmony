@@ -5,8 +5,9 @@ export interface ApiServiceOptions {
 }
 
 interface RequestArgs {
-    body: string;
-    headers: { [key: string]: string };
+    method: string;
+    body?: string;
+    headers?: { [key: string]: string };
 }
 
 export class ApiServiceBase {
@@ -19,23 +20,26 @@ export class ApiServiceBase {
         this.request = options.request;
     }
 
-    protected static async parse(resp: APIResponse): Promise<any> {
+    private async fetch(url: string, opts: RequestArgs): Promise<APIResponse> {
+        let resp = await this.request[opts.method.toLowerCase()](url, { data: opts.body, headers: opts.headers });
         if (resp.status() < 200 || resp.status() >= 300)
             throw new Error();
-        if (resp.headers()['content-length'] == '0')
-            return undefined;
-        if (resp.headers()['content-type']?.startsWith('application/json'))
-            return await resp.json();
-        return await resp.text();
+        return resp;
     }
 
-    protected async GET<T>(url: string, init?: RequestArgs): Promise<T> {
-        let resp = await this.request.get(url, { data: init?.body, headers: init?.headers });
-        return ApiServiceBase.parse(resp) as any;
+    protected async fetchJson(url: string, opts: RequestArgs): Promise<any> {
+        let resp = await this.fetch(url, opts);
+        return resp.json();
     }
 
-    protected async POST<T>(url: string, init?: RequestArgs): Promise<T> {
-        let resp = await this.request.post(url, { data: init?.body, headers: init?.headers });
-        return ApiServiceBase.parse(resp) as any;
+    protected async fetchString(url: string, opts: RequestArgs): Promise<any> {
+        let resp = await this.fetch(url, opts);
+        return resp.text();
+    }
+
+    protected async fetchVoid(url: string, opts: RequestArgs): Promise<any> {
+        let resp = await this.fetch(url, opts);
+        if (resp.headers()['content-length'] != '0')
+            throw new Error();
     }
 }

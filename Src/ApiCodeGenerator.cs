@@ -12,6 +12,8 @@ public class ApiCodeGenerator
     public string ServiceClassExtends = "ApiServiceBase";
     public string ServiceOptionsType = "ApiServiceOptions";
     public string ReturnTypeTemplate = "Promise<{0}>";
+    public string Fetcher = "fetchJson";
+    public Dictionary<Type, string> CustomFetchers = new() { [typeof(void)] = "fetchVoid", [typeof(string)] = "fetchString" };
 
     public ApiCodeGenerator(ApiDesc api)
     {
@@ -209,30 +211,30 @@ public class ApiCodeGenerator
                         var bodyParams = method.Parameters.Where(p => p.Location == ParameterLocation.RequestBody).OrderBy(p => p.TsName).ToList();
                         if (bodyParams.Count > 1 && (method.BodyEncoding == BodyEncoding.Raw || method.BodyEncoding == BodyEncoding.Json))
                             throw new InvalidOperationException($"The body encoding for this method allows for at most one body parameter. Offending parameters: [{bodyParams.Select(p => p.TsName).JoinString(", ")}], method {method.Method.Name}, controller {s.ControllerType.FullName}");
-                        var bodyCode = "";
+                        var fetchOpts = $"method: '{httpMethod.ToUpper()}'";
                         if (bodyParams.Count > 0)
                         {
                             if (method.BodyEncoding == BodyEncoding.Raw)
                             {
-                                bodyCode = $", {{ body: {bodyParams[0].TsName} }}";
+                                fetchOpts += $", body: {bodyParams[0].TsName}";
                             }
                             else if (method.BodyEncoding == BodyEncoding.Json)
                             {
-                                bodyCode = $", {{ body: JSON.stringify({bodyParams[0].TsName}), headers: {{ 'Content-Type': 'application/json' }} }}";
+                                fetchOpts += $", body: JSON.stringify({bodyParams[0].TsName}), headers: {{ 'Content-Type': 'application/json' }}";
                             }
                             else if (method.BodyEncoding == BodyEncoding.FormUrlEncoded)
                             {
                                 writer.WriteLine("let __body = new URLSearchParams();");
                                 foreach (var bp in bodyParams)
                                     writer.WriteLine($"__body.append('{bp.TsName}', '' + {bp.TsName});");
-                                bodyCode = ", { body: __body }";
+                                fetchOpts += ", body: __body";
                             }
                             else if (method.BodyEncoding == BodyEncoding.MultipartFormData)
                             {
                                 writer.WriteLine("let __body = new FormData();");
                                 foreach (var bp in bodyParams)
                                     writer.WriteLine($"__body.append('{bp.TsName}', '' + {bp.TsName});");
-                                bodyCode = ", { body: __body }";
+                                fetchOpts += ", body: __body";
                                 throw new NotImplementedException("FormData encoding is not fully implemented."); // no support for file name, parameter is always stringified with no support for Blob
                             }
                             else
@@ -240,11 +242,13 @@ public class ApiCodeGenerator
                         }
 
                         // Output call
+                        var getter = Fetcher;
+                        if (!method.ReturnType.Array && CustomFetchers.ContainsKey(method.ReturnType.RawType))
+                            getter = CustomFetchers[method.ReturnType.RawType];
                         if (canDirectReturn)
-                            writer.Write("return ");
+                            writer.WriteLine($"return this.{getter}(url, {{ {fetchOpts} }}) as Promise<{GetTypeScript(method.ReturnType, "")}>;");
                         else
-                            writer.Write("let result = await ");
-                        writer.WriteLine($"this.{httpMethod}<{GetTypeScript(method.ReturnType, "")}>(url{bodyCode});");
+                            writer.WriteLine($"let result = await this.{getter}(url{fetchOpts}) as {GetTypeScript(method.ReturnType, "")};");
 
                         if (!canDirectReturn)
                         {

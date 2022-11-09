@@ -44,6 +44,7 @@ export class BasicStrictService extends ApiServiceBase {
         ModelQuery: (foo: HarmonyTests.FooResult): string => `modelquery?foo=${encodeURIComponent('' + foo)}`,
         Overloaded1_1: (p1: string): string => `overloaded1a?p1=${encodeURIComponent('' + p1)}`,
         Overloaded1_2: (p1: string, p2: number): string => `overloaded1b?p1=${encodeURIComponent('' + p1)}&p2=${encodeURIComponent('' + p2)}`,
+        PostVoid: (): string => `void`,
         QueryAndRoute: (q1: string, r1: number, q2: boolean, r2: string): string => `qandr/${encodeURIComponent('' + r1)}/foo/${encodeURIComponent('' + r2)}/bar?q1=${encodeURIComponent('' + q1)}&q2=${encodeURIComponent('' + q2)}`,
         QueryArray: (q1: string, qa: string[]): string => `qarr?q1=${encodeURIComponent('' + q1)}&qa=${encodeURIComponent('' + qa)}`,
         QueryOnly: (q1: string, q2: boolean): string => `BasicStrict/qonly?q1=${encodeURIComponent('' + q1)}&q2=${encodeURIComponent('' + q2)}`,
@@ -69,6 +70,7 @@ export class BasicStrictService extends ApiServiceBase {
         this.ModelQuery = this.ModelQuery.bind(this);
         this.Overloaded1_1 = this.Overloaded1_1.bind(this);
         this.Overloaded1_2 = this.Overloaded1_2.bind(this);
+        this.PostVoid = this.PostVoid.bind(this);
         this.QueryAndRoute = this.QueryAndRoute.bind(this);
         this.QueryArray = this.QueryArray.bind(this);
         this.QueryOnly = this.QueryOnly.bind(this);
@@ -79,102 +81,107 @@ export class BasicStrictService extends ApiServiceBase {
 
     public BodyArray(q1: string, qa: string[]): Promise<string[]> {
         let url = this.endpoints.BodyArray(q1, qa);
-        return this.GET<string[]>(url, { body: JSON.stringify(qa), headers: { 'Content-Type': 'application/json' } });
+        return this.fetchJson(url, { method: 'GET', body: JSON.stringify(qa), headers: { 'Content-Type': 'application/json' } }) as Promise<string[]>;
     }
 
     public GetBinary(): Promise<any> {
         let url = this.endpoints.GetBinary();
-        return this.GET<any>(url);
+        return this.fetchJson(url, { method: 'GET' }) as Promise<any>;
     }
 
     public GetEnum(): Promise<HarmonyTests.TestEnum> {
         let url = this.endpoints.GetEnum();
-        return this.GET<HarmonyTests.TestEnum>(url);
+        return this.fetchJson(url, { method: 'GET' }) as Promise<HarmonyTests.TestEnum>;
     }
 
     public GetInt(): Promise<number> {
         let url = this.endpoints.GetInt();
-        return this.GET<number>(url);
+        return this.fetchJson(url, { method: 'GET' }) as Promise<number>;
     }
 
     public GetInt0(): Promise<number> {
         let url = this.endpoints.GetInt0();
-        return this.GET<number>(url);
+        return this.fetchJson(url, { method: 'GET' }) as Promise<number>;
     }
 
     public GetModel(): Promise<HarmonyTests.FooResult> {
         let url = this.endpoints.GetModel();
-        return this.GET<HarmonyTests.FooResult>(url);
+        return this.fetchJson(url, { method: 'GET' }) as Promise<HarmonyTests.FooResult>;
     }
 
     public GetModelArr(): Promise<HarmonyTests.FooResult[]> {
         let url = this.endpoints.GetModelArr();
-        return this.GET<HarmonyTests.FooResult[]>(url);
+        return this.fetchJson(url, { method: 'GET' }) as Promise<HarmonyTests.FooResult[]>;
     }
 
     public GetModelArr0(): Promise<HarmonyTests.FooResult[]> {
         let url = this.endpoints.GetModelArr0();
-        return this.GET<HarmonyTests.FooResult[]>(url);
+        return this.fetchJson(url, { method: 'GET' }) as Promise<HarmonyTests.FooResult[]>;
     }
 
     public GetString(): Promise<string> {
         let url = this.endpoints.GetString();
-        return this.GET<string>(url);
+        return this.fetchString(url, { method: 'GET' }) as Promise<string>;
     }
 
     public GetString0(): Promise<string> {
         let url = this.endpoints.GetString0();
-        return this.GET<string>(url);
+        return this.fetchString(url, { method: 'GET' }) as Promise<string>;
     }
 
     public ModelBody(foo: HarmonyTests.FooResult): Promise<HarmonyTests.FooResult> {
         let url = this.endpoints.ModelBody(foo);
-        return this.POST<HarmonyTests.FooResult>(url, { body: JSON.stringify(foo), headers: { 'Content-Type': 'application/json' } });
+        return this.fetchJson(url, { method: 'POST', body: JSON.stringify(foo), headers: { 'Content-Type': 'application/json' } }) as Promise<HarmonyTests.FooResult>;
     }
 
     public ModelQuery(foo: HarmonyTests.FooResult): Promise<HarmonyTests.FooResult> {
         let url = this.endpoints.ModelQuery(foo);
-        return this.POST<HarmonyTests.FooResult>(url);
+        return this.fetchJson(url, { method: 'POST' }) as Promise<HarmonyTests.FooResult>;
     }
 
     public Overloaded1_1(p1: string): Promise<string> {
         let url = this.endpoints.Overloaded1_1(p1);
-        return this.GET<string>(url);
+        return this.fetchString(url, { method: 'GET' }) as Promise<string>;
     }
 
     public Overloaded1_2(p1: string, p2: number): Promise<string> {
         let url = this.endpoints.Overloaded1_2(p1, p2);
-        return this.GET<string>(url);
+        return this.fetchString(url, { method: 'GET' }) as Promise<string>;
+    }
+
+    public PostVoid(): Promise<void> {
+        let url = this.endpoints.PostVoid();
+        return this.fetchVoid(url, { method: 'POST' }) as Promise<void>;
     }
 
     public QueryAndRoute(q1: string, r1: number, q2: boolean, r2: string): Promise<HarmonyTests.FooResult> {
         let url = this.endpoints.QueryAndRoute(q1, r1, q2, r2);
-        return this.GET<HarmonyTests.FooResult>(url);
+        return this.fetchJson(url, { method: 'GET' }) as Promise<HarmonyTests.FooResult>;
     }
 
     public QueryArray(q1: string, qa: string[]): Promise<string[]> {
         let url = this.endpoints.QueryArray(q1, qa);
-        return this.GET<string[]>(url);
+        return this.fetchJson(url, { method: 'GET' }) as Promise<string[]>;
     }
 
     public QueryOnly(q1: string, q2: boolean): Promise<HarmonyTests.FooResult> {
         let url = this.endpoints.QueryOnly(q1, q2);
-        return this.GET<HarmonyTests.FooResult>(url);
+        return this.fetchJson(url, { method: 'GET' }) as Promise<HarmonyTests.FooResult>;
     }
 
     public QueryRouteBody(q1: string, r1: number, q2: boolean, r2: string): Promise<HarmonyTests.FooResult> {
         let url = this.endpoints.QueryRouteBody(q1, r1, q2, r2);
-        return this.GET<HarmonyTests.FooResult>(url, { body: JSON.stringify(r1), headers: { 'Content-Type': 'application/json' } });
+        return this.fetchJson(url, { method: 'GET', body: JSON.stringify(r1), headers: { 'Content-Type': 'application/json' } }) as Promise<HarmonyTests.FooResult>;
     }
 
     public SameName1Get(): Promise<string> {
         let url = this.endpoints.SameName1Get();
-        return this.GET<string>(url);
+        return this.fetchString(url, { method: 'GET' }) as Promise<string>;
     }
 
     public SameName2Post(): Promise<string> {
         let url = this.endpoints.SameName2Post();
-        return this.POST<string>(url);
+        return this.fetchString(url, { method: 'POST' }) as Promise<string>;
     }
 
 }
