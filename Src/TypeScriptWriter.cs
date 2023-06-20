@@ -1,9 +1,6 @@
-﻿using System;
-using System.IO;
+﻿namespace CsTsHarmony;
 
-namespace CsTsHarmony;
-
-public class TypeScriptWriter : IDisposable
+public class CodeWriter : IDisposable
 {
     private TextWriter _writer;
     private bool _needIndent = true;
@@ -11,14 +8,14 @@ public class TypeScriptWriter : IDisposable
 
     public string IndentTemplate = "    ";
 
-    public TypeScriptWriter(string filepath)
+    public CodeWriter(string filepath)
     {
         filepath = Path.GetFullPath(filepath);
         Directory.CreateDirectory(Path.GetDirectoryName(filepath));
         _writer = new StreamWriter(File.Open(filepath, FileMode.Create, FileAccess.Write, FileShare.Read));
     }
 
-    public TypeScriptWriter(TextWriter writer)
+    public CodeWriter(TextWriter writer)
     {
         _writer = writer;
     }
@@ -31,10 +28,10 @@ public class TypeScriptWriter : IDisposable
 
     private class Indenter : IDisposable
     {
-        private TypeScriptWriter _owner;
+        private CodeWriter _owner;
         private bool _indent;
 
-        public Indenter(TypeScriptWriter owner, bool indent)
+        public Indenter(CodeWriter owner, bool indent)
         {
             _owner = owner;
             _indent = indent;
@@ -69,5 +66,16 @@ public class TypeScriptWriter : IDisposable
         Write(str);
         _writer.WriteLine();
         _needIndent = true;
+    }
+}
+
+public class TypeScriptWriter : CodeWriter
+{
+    public TypeScriptWriter(string filepath) : base(filepath)
+    {
+    }
+
+    public TypeScriptWriter(TextWriter writer) : base(writer)
+    {
     }
 }
