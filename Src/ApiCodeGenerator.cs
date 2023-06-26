@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System;
 using System.Text;
 
 namespace CsTsHarmony;
@@ -17,6 +17,9 @@ public class ApiCodeGenerator
     public string Fetcher = "fetchJson";
     public Dictionary<Type, string> CustomFetchers = new() { [typeof(void)] = "fetchVoid", [typeof(string)] = "fetchString" };
 
+    // If the key is present but the value is null, this means this type requires no conversion. The "Needed" properties on a converter keep track of whether anything uses it.
+    private Dictionary<string, TypeConverter> _typeConverters = new();
+
     public ApiCodeGenerator(ApiDesc api)
     {
         Api = api;
@@ -34,12 +37,19 @@ public class ApiCodeGenerator
             writer.WriteLine(line);
         if (StartLines.Count > 0)
             writer.WriteLine();
-        if (Imports.Count > 0)
+
+        var imports = Imports.ToHashSet();
+        foreach (var t in Api.Types.Values.OfType<BasicTypeDesc>())
+            if (t.TsConverter != null)
+                foreach (var imp in t.TsConverter.GetImports())
+                    imports.Add(imp);
+        if (imports.Count > 0)
         {
-            foreach (var import in Imports.Order())
+            foreach (var import in imports.Order())
                 writer.WriteLine(import);
             writer.WriteLine();
         }
+
         writer.WriteLine("declare global {");
         writer.WriteLine();
         using (writer.Indent())
@@ -132,10 +142,9 @@ public class ApiCodeGenerator
 
     protected void OutputService(TypeScriptWriter writer, ServiceDesc s)
     {
-#if false
-        _convertersUsedFrom = new HashSet<TypeConverter>();
-        _convertersUsedTo = new HashSet<TypeConverter>();
-#endif
+        var convertersUsedFrom = new HashSet<TypeConverter>();
+        var convertersUsedTo = new HashSet<TypeConverter>();
+
         writer.WriteLine($"export class {ServiceClassName(s.TsName)}{(ServiceClassExtends == null ? "" : $" extends {ServiceClassExtends}")} {{");
         writer.WriteLine();
         using (writer.Indent())
@@ -168,11 +177,7 @@ public class ApiCodeGenerator
             {
                 foreach (var httpMethod in method.HttpMethods.Order())
                 {
-#if false
                     bool canDirectReturn = getConverter(method.ReturnType) == null;
-#else
-                    bool canDirectReturn = true;
-#endif
                     writer.Write($"public {(canDirectReturn ? "" : "async ")}{getMethodName(method, httpMethod)}(");
                     writer.Write(getMethodParams(method.Parameters));
                     writer.WriteLine($"): {string.Format(ReturnTypeTemplate, GetTypeScript(method.ReturnType, ""))} {{");
@@ -180,11 +185,9 @@ public class ApiCodeGenerator
                     {
                         writer.WriteLine($"let url = this.endpoints.{getMethodName(method, httpMethod)}({method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString).Select(p => p.TsName).JoinString(", ")});");
 
-#if false
                         // Output parameter type conversions
                         foreach (var p in method.Parameters)
                             OutputTypeConversion(writer, p.TsName, p.Type, toTypeScript: false);
-#endif
 
                         // Build request body
                         var bodyParams = method.Parameters.Where(p => p.Location == ParameterLocation.RequestBody).OrderBy(p => p.TsName).ToList();
@@ -227,13 +230,12 @@ public class ApiCodeGenerator
                         if (canDirectReturn)
                             writer.WriteLine($"return this.{getter}(url, {{ {fetchOpts} }}) as Promise<{GetTypeScript(method.ReturnType, "")}>;");
                         else
-                            writer.WriteLine($"let result = await this.{getter}(url{fetchOpts}) as {GetTypeScript(method.ReturnType, "")};");
+                            writer.WriteLine($"let result = await this.{getter}(url, {{ {fetchOpts} }}) as {GetTypeScript(method.ReturnType, "")};");
 
                         if (!canDirectReturn)
                         {
                             // Output return type conversion
-                            //OutputTypeConversion(writer, "result", method.ReturnType, toTypeScript: true);
-
+                            OutputTypeConversion(writer, "result", method.ReturnType, toTypeScript: true);
                             writer.WriteLine("return result;");
                         }
                     }
@@ -242,30 +244,48 @@ public class ApiCodeGenerator
                 }
             }
 
-#if false
             // Output type converters
-            foreach (var tc in _typeConverters.Values.Where(c => c != null).OrderBy(c => GetHash(c.ForType)))
+            foreach (var tc in _typeConverters.Values.Where(c => c != null).OrderBy(c => GetConverterName(c.ForType)))
             {
-                if (_convertersUsedFrom.Contains(tc))
+                if (convertersUsedFrom.Contains(tc))
                 {
-                    writer.WriteLine($"private {tc.FunctionName(toTypeScript: false)}(val: {GetTypeScript(tc.ForType, "")}): any {{");
+                    writer.WriteLine($"private {GetConverterName(tc.ForType, toTypeScript: false)}(val: {GetTypeScript(tc.ForType, "")}): any {{");
                     using (writer.Indent())
                         tc.WriteFunctionBody(writer, false);
                     writer.WriteLine("}");
                     writer.WriteLine();
                 }
-                if (_convertersUsedTo.Contains(tc))
+                if (convertersUsedTo.Contains(tc))
                 {
-                    writer.WriteLine($"private {tc.FunctionName(toTypeScript: true)}(val: any): {GetTypeScript(tc.ForType, "")} {{");
+                    writer.WriteLine($"private {GetConverterName(tc.ForType, toTypeScript: true)}(val: any): {GetTypeScript(tc.ForType, "")} {{");
                     using (writer.Indent())
                         tc.WriteFunctionBody(writer, true);
                     writer.WriteLine("}");
                     writer.WriteLine();
                 }
             }
-#endif
         }
         writer.WriteLine("}");
+
+        void OutputTypeConversion(TypeScriptWriter writer, string lvalue, TypeRef type, bool toTypeScript)
+        {
+            var converter = getConverter(type);
+            if (converter == null)
+                return;
+            MarkUsedConverters(converter, toTypeScript);
+            writer.WriteLine($"if ({lvalue})");
+            using (writer.Indent())
+                writer.WriteLine($"{lvalue} = this.{GetConverterName(converter.ForType, toTypeScript)}({lvalue});");
+        }
+
+        void MarkUsedConverters(TypeConverter converter, bool toTypeScript)
+        {
+            var set = !toTypeScript ? convertersUsedFrom : convertersUsedTo;
+            if (!set.Add(converter))
+                return;
+            foreach (var used in converter.UsesConverters)
+                MarkUsedConverters(used, toTypeScript);
+        }
     }
 
     private string getMethodName(MethodDesc method, string httpMethod)
@@ -287,117 +307,96 @@ public class ApiCodeGenerator
         return sb.ToString();
     }
 
-#if false
     private class TypeConverter
     {
         public TypeRef ForType;
         // conversion function is called only if the value to be converted is truthy
         public Action<TypeScriptWriter, bool> WriteFunctionBody;
-        public string FunctionName(bool toTypeScript) => "convert" + (toTypeScript ? "ToTs_" : "FromTs_") + GetHash(ForType);
         public HashSet<TypeConverter> UsesConverters = new HashSet<TypeConverter>();
     }
 
-    // If the key is present but the value is null, this means this type requires no conversion. The "Needed" properties on a converter keep track of whether anything uses it.
-    private Dictionary<string, TypeConverter> _typeConverters = new Dictionary<string, TypeConverter>();
-    private HashSet<TypeConverter> _convertersUsedFrom, _convertersUsedTo;
-
-    private void OutputTypeConversion(TypeScriptWriter writer, string lvalue, TypeRef type, bool toTypeScript)
+    private TypeConverter getConverter(TypeRef typeref)
     {
-        var converter = getConverter(type);
-        if (converter == null)
-            return;
-        MarkUsedConverters(converter, toTypeScript);
-        writer.WriteLine($"if ({lvalue})");
-        using (writer.Indent())
-            writer.WriteLine($"{lvalue} = this.{converter.FunctionName(toTypeScript)}({lvalue});");
-    }
+        // converters are emitted as not nullable on all types because callers avoid invoking converters for non-truthy values
+        if (typeref.Nullable || (typeref.Array && typeref.ArrayNullable))
+            return getConverter(new TypeRef { MappedType = typeref.MappedType, RawType = typeref.RawType, Array = typeref.Array });
 
-    private void MarkUsedConverters(TypeConverter converter, bool toTypeScript)
-    {
-        var set = !toTypeScript ? _convertersUsedFrom : _convertersUsedTo;
-        if (!set.Add(converter))
-            return;
-        foreach (var used in converter.UsesConverters)
-            MarkUsedConverters(used, toTypeScript);
-    }
+        var key = GetConverterName(typeref);
+        if (_typeConverters.TryGetValue(key, out var converter))
+            return converter;
 
-    private TypeConverter getConverter(TypeRef type)
-    {
-        var key = GetTypeScript(type, "");
-        if (!_typeConverters.TryGetValue(key, out var converter))
+        converter = new TypeConverter { ForType = typeref };
+        // there must be no early returns below; we must populate this converter and add it to the dictionary
+
+        if (typeref.Array)
         {
-            converter = new TypeConverter { ForType = type };
-
-            if (type.BasicType != null)
-            {
-                if (type.TypeMapper == null)
-                    converter = null;
-                else
-                {
-                    converter.WriteFunctionBody = (writer, toTypeScript) =>
-                    {
-                        if (!toTypeScript)
-                            writer.WriteLine($"return {type.TypeMapper.ConvertFromTypeScript("val")};");
-                        else
-                            writer.WriteLine($"return {type.TypeMapper.ConvertToTypeScript("val")};");
-                    };
-                }
-            }
-            else if (type.EnumType != null)
-            {
-                // TODO: Flags
+            var elConverter = getConverter(new TypeRef { MappedType = typeref.MappedType, RawType = typeref.MappedType.RawType });
+            if (elConverter == null)
                 converter = null;
-            }
-            else if (type.ArrayElementType != null)
+            else
             {
-                var elConverter = getConverter(type.ArrayElementType);
-                if (elConverter == null)
-                    converter = null;
-                else
+                converter.UsesConverters.Add(elConverter);
+                converter.WriteFunctionBody = (writer, toTypeScript) =>
                 {
-                    converter.UsesConverters.Add(elConverter);
-                    converter.WriteFunctionBody = (writer, toTypeScript) =>
+                    writer.WriteLine("for (let i = 0; i < val.length; i++)");
+                    using (writer.Indent())
                     {
-                        writer.WriteLine("for (let i = 0; i < val.length; i++)");
+                        writer.WriteLine("if (val[i])");
                         using (writer.Indent())
-                        {
-                            writer.WriteLine("if (val[i])");
-                            using (writer.Indent())
-                                writer.WriteLine($"val[i] = this.{elConverter.FunctionName(toTypeScript)}(val[i]);");
-                        }
-                        writer.WriteLine("return val;");
-                    };
-                }
+                            writer.WriteLine($"val[i] = this.{GetConverterName(elConverter.ForType, toTypeScript)}(val[i]);");
+                    }
+                    writer.WriteLine("return val;");
+                };
             }
-            else if (type.InterfaceType != null)
+        }
+        // not array therefore it's just a reference to a TypeDesc
+        else if (typeref.MappedType is BasicTypeDesc bt)
+        {
+            if (bt.TsConverter == null)
+                converter = null;
+            else
             {
-                var propConverters = type.InterfaceType.Properties.Select(p => new { prop = p, conv = getConverter(p.TsType) }).Where(x => x.conv != null).ToList();
-                if (propConverters.Count == 0)
-                    converter = null;
-                else
+                converter.WriteFunctionBody = (writer, toTypeScript) =>
+                {
+                    if (!toTypeScript)
+                        writer.WriteLine($"return {bt.TsConverter.ConvertFromTypeScript("val")};");
+                    else
+                        writer.WriteLine($"return {bt.TsConverter.ConvertToTypeScript("val")};");
+                };
+            }
+        }
+        else if (typeref.MappedType is EnumTypeDesc et)
+        {
+            // TODO: Flags
+            converter = null;
+        }
+        else if (typeref.MappedType is CompositeTypeDesc ct)
+        {
+            var propConverters = ct.Properties.Select(p => new { prop = p, conv = getConverter(p.Type) }).Where(x => x.conv != null).ToList();
+            if (propConverters.Count == 0)
+                converter = null;
+            else
+            {
+                foreach (var pc in propConverters)
+                    converter.UsesConverters.Add(pc.conv);
+                converter.WriteFunctionBody = (writer, toTypeScript) =>
                 {
                     foreach (var pc in propConverters)
-                        converter.UsesConverters.Add(pc.conv);
-                    converter.WriteFunctionBody = (writer, toTypeScript) =>
                     {
-                        foreach (var pc in propConverters)
-                        {
-                            writer.WriteLine($"if (val.{pc.prop.Name})");
-                            using (writer.Indent())
-                                writer.WriteLine($"val.{pc.prop.Name} = this.{pc.conv.FunctionName(toTypeScript)}(val.{pc.prop.Name});");
-                        }
-                        writer.WriteLine("return val;");
-                    };
-                }
+                        writer.WriteLine($"if (val.{pc.prop.Name})");
+                        using (writer.Indent())
+                            writer.WriteLine($"val.{pc.prop.Name} = this.{GetConverterName(pc.conv.ForType, toTypeScript)}(val.{pc.prop.Name});");
+                    }
+                    writer.WriteLine("return val;");
+                };
             }
-            else
-                throw new Exception();
         }
+        else
+            throw new Exception();
 
         _typeConverters[key] = converter;
         return converter;
     }
-#endif
 
     private static string GetTypeScript(TypeRef tr, string fromNamespace)
     {
@@ -423,9 +422,12 @@ public class ApiCodeGenerator
         return result;
     }
 
-    private static string GetHash(TypeRef tr)
+    private static string GetConverterName(TypeRef tr, bool? toTypeScript = null)
     {
-        return MD5.HashData(Encoding.UTF8.GetBytes(GetTypeScript(tr, ""))).Take(8).Select(b => $"{b:x2}").JoinString();
+        // multiple C# types can map to the same TS type and we want different converters for those, so we go by the C# type name here
+        var name = tr.RawType.FullName.Replace(".", "") + (tr.Array ? "Array" : ""); // nullability is irrelevant / uniform for converters as null values are not passed through converters
+        //name = MD5.HashData(Encoding.UTF8.GetBytes(name)).Take(8).Select(b => $"{b:x2}").JoinString();
+        return toTypeScript == null ? name : ("convert" + (toTypeScript == true ? "ToTs_" : "FromTs_") + name);
     }
 }
 

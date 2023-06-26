@@ -7,6 +7,21 @@ public interface ITypeMapper
     TypeDesc MapType(Type type, Func<Type, TypeRef> referenceType);
 }
 
+public class LambdaTypeMapper : ITypeMapper
+{
+    public Dictionary<Type, TypeDesc> TypeMap { get; set; } = new();
+
+    public TypeDesc MapType(Type type, Func<Type, TypeRef> referenceType)
+    {
+        return TypeMap.ContainsKey(type) ? TypeMap[type] : null;
+    }
+
+    public void AddBasic(Type csType, string tsType, Func<string, string> toTs, Func<string, string> fromTs, params string[] imports)
+    {
+        TypeMap.Add(csType, new BasicTypeDesc(csType, tsType) { TsConverter = new LambdaTypeConverter { FromTypeScript = fromTs, ToTypeScript = toTs, Imports = imports } });
+    }
+}
+
 public class BasicTypeMapper : ITypeMapper
 {
     public Dictionary<string, string> TypeMap { get; set; }

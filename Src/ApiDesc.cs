@@ -60,7 +60,7 @@ public class MethodParameterDesc
 
 public class TypeRef
 {
-    public Type RawType;
+    public Type RawType; // underlying type of a nullable or an array: it's neither nullable nor an array
     public bool Nullable;
     public bool Array;
     public bool ArrayNullable;
@@ -87,6 +87,7 @@ public class BasicTypeDesc : TypeDesc
 {
     public string TsType;
     public override string ToString() => $"{TsType} ({RawType.Name})";
+    public ITypeConverter TsConverter;
 
     public BasicTypeDesc(Type rawType, string tsType) : base(rawType)
     {
