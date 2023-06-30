@@ -6,6 +6,7 @@ namespace CsTsHarmony;
 public class JsonTypeBuilder
 {
     public ApiDesc Api; // TODO: remove
+    public Dictionary<Type, TypeDesc> Types = new(); // TODO: don't expose like this
 
     public IgnoreConfig<Type> IgnoreTypes = new();
     public List<ITypeMapper> TypeMappers = new() { new BasicTypeMapper(), new EnumTypeMapper(), new CompositeTypeMapper() };
@@ -49,7 +50,7 @@ public class JsonTypeBuilder
             tr.Nullable = true;
         }
 
-        if (!Api.Types.ContainsKey(tr.RawType))
+        if (!Types.ContainsKey(tr.RawType))
             TypesToMap.Add(tr.RawType);
         return tr;
 
@@ -80,19 +81,19 @@ public class JsonTypeBuilder
             var type = TypesToMap.First();
             TypesToMap.Remove(type);
 
-            if (Api.Types.ContainsKey(type))
+            if (Types.ContainsKey(type))
                 continue; // it was manually mapped by the caller before invoking MapTypes
             if (!IgnoreTypes.Include(type))
                 continue;
 
-            Api.Types[type] = null; // referenceType relies on the existence of this entry to prevent loops on reference cycles
+            Types[type] = null; // referenceType relies on the existence of this entry to prevent loops on reference cycles
 
             foreach (var mapper in TypeMappers)
             {
                 var result = mapper.MapType(type, ReferenceType);
                 if (result != null)
                 {
-                    Api.Types[type] = result;
+                    Types[type] = result;
                     break;
                 }
             }
@@ -104,29 +105,29 @@ public class JsonTypeBuilder
     public void ApplyTypes()
     {
         // Remove null values from Api.Types as that means the same as not being in the mapping at all
-        foreach (var kvp in Api.Types.Where(kvp => kvp.Value == null).ToList())
-            Api.Types.Remove(kvp.Key);
+        foreach (var kvp in Types.Where(kvp => kvp.Value == null).ToList())
+            Types.Remove(kvp.Key);
         // Populate TypeRefs with the mapped types and ignore (remove) everything in the API that uses unmapped types
         foreach (var s in Api.Services)
         {
             s.Methods.RemoveAll(m => !have(m.ReturnType) || m.Parameters.Any(p => !have(p.Type)));
             foreach (var m in s.Methods)
             {
-                m.ReturnType.MappedType = Api.Types[m.ReturnType.RawType];
+                m.ReturnType.MappedType = Types[m.ReturnType.RawType];
                 foreach (var p in m.Parameters)
-                    p.Type.MappedType = Api.Types[p.Type.RawType];
+                    p.Type.MappedType = Types[p.Type.RawType];
             }
         }
-        foreach (var t in Api.Types.Values.OfType<CompositeTypeDesc>())
+        foreach (var t in Types.Values.OfType<CompositeTypeDesc>())
         {
             t.Properties.RemoveAll(p => !have(p.Type));
             foreach (var p in t.Properties)
-                p.Type.MappedType = Api.Types[p.Type.RawType];
+                p.Type.MappedType = Types[p.Type.RawType];
             t.Extends.RemoveAll(e => !have(e));
             foreach (var e in t.Extends)
-                e.MappedType = Api.Types[e.RawType];
+                e.MappedType = Types[e.RawType];
         }
 
-        bool have(TypeRef r) => Api.Types.ContainsKey(r.RawType);
+        bool have(TypeRef r) => Types.ContainsKey(r.RawType);
     }
 }

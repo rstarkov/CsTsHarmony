@@ -6,7 +6,6 @@ namespace CsTsHarmony;
 public class ApiDesc
 {
     public List<ServiceDesc> Services = new();
-    public Dictionary<Type, TypeDesc> Types = new();
 }
 
 public class ServiceDesc
