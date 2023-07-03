@@ -78,4 +78,22 @@ public class TypeScriptWriter : CodeWriter
     public TypeScriptWriter(TextWriter writer) : base(writer)
     {
     }
+
+    public static string TypeSignature(TypeDesc type, string fromNamespace)
+    {
+        if (type is BasicTypeDesc bt)
+            return bt.TsType;
+        else if (type is EnumTypeDesc et)
+            return fromNamespace == et.TsNamespace ? et.TsName : $"{et.TsNamespace}.{et.TsName}";
+        else if (type is CompositeTypeDesc ct)
+            return fromNamespace == ct.TsNamespace ? ct.TsName : $"{ct.TsNamespace}.{ct.TsName}";
+        else if (type is NullableTypeDesc nt)
+            return $"{TypeSignature(nt.ElementType, fromNamespace)} | null";
+        else if (type is ArrayTypeDesc at)
+            return $"{ParenthesizeType(TypeSignature(at.ElementType, fromNamespace))}[]";
+        else
+            throw new InvalidOperationException("ilsauwhf");
+    }
+
+    public static string ParenthesizeType(string type) => type.Any(c => c == ' ' || c == '|' || c == '[') ? $"({type})" : type;
 }

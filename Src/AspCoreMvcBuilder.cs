@@ -79,7 +79,7 @@ public class AspCoreMvcBuilder
         {
             TsName = cad.ActionName,
             HttpMethods = cad.ActionConstraints?.OfType<HttpMethodActionConstraint>().FirstOrDefault()?.HttpMethods.ToList(),
-            ReturnType = TypeBuilder.ReferenceType(cad.MethodInfo.ReturnType),
+            ReturnType = TypeBuilder.AddType(cad.MethodInfo.ReturnType),
             UrlTemplate = TemplateParser.Parse(cad.AttributeRouteInfo.Template),
             BodyEncoding = BodyEncoding.Json,
         };
@@ -95,7 +95,7 @@ public class AspCoreMvcBuilder
             {
                 TsName = p.Name,
                 RequestName = p.Name,
-                Type = TypeBuilder.ReferenceType(p.ParameterType),
+                Type = TypeBuilder.AddType(p.ParameterType),
                 Location = _paramLocations[p.BindingInfo.BindingSource.Id],
                 Optional = p is ControllerParameterDescriptor cpd ? cpd.ParameterInfo.HasDefaultValue : false,
             })

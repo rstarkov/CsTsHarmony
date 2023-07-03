@@ -27,7 +27,7 @@ public class MethodDesc
     public string TsName;
     public MethodInfo Method { get; }
     public ServiceDesc Service { get; }
-    public TypeRef ReturnType;
+    public TypeDesc ReturnType;
     public List<MethodParameterDesc> Parameters = new();
     public RouteTemplate UrlTemplate; // if we were going for full abstraction this would have to be wrapped into a *Desc class but we're not
     public List<string> HttpMethods = new List<string>();
@@ -47,7 +47,7 @@ public class MethodParameterDesc
     public string TsName;
     public string RequestName;
     public MethodDesc Method { get; }
-    public TypeRef Type;
+    public TypeDesc Type;
     public ParameterLocation Location;
     public bool Optional;
 
@@ -57,29 +57,14 @@ public class MethodParameterDesc
     }
 }
 
-public class TypeRef
-{
-    public Type RawType; // underlying type of a nullable or an array: it's neither nullable nor an array
-    public bool Nullable;
-    public bool Array;
-    public bool ArrayNullable;
-    public TypeDesc MappedType;
-
-    public override string ToString() => $"{RawType}{(Nullable ? "?" : "")}{(Array ? "[]" : "")}{(Array && ArrayNullable ? "?" : "")}";
-}
-
 public abstract class TypeDesc
 {
-    public string TsName; // null if this type does not require a declaration to be emitted
-    public string TsNamespace;
     public Type RawType { get; }
 
     public TypeDesc(Type rawType)
     {
         RawType = rawType;
     }
-
-    public virtual string TsReference(string fromNamespace) => fromNamespace == TsNamespace ? TsName : $"{TsNamespace}.{TsName}";
 }
 
 public class BasicTypeDesc : TypeDesc
@@ -91,15 +76,43 @@ public class BasicTypeDesc : TypeDesc
     public BasicTypeDesc(Type rawType, string tsType) : base(rawType)
     {
         TsType = tsType;
-        TsName = null;
-        TsNamespace = null;
     }
-
-    public override string TsReference(string fromNamespace) => TsType;
 }
 
-public class EnumTypeDesc : TypeDesc
+public class ArrayTypeDesc : TypeDesc
 {
+    public TypeDesc ElementType;
+
+    public ArrayTypeDesc(Type rawType, TypeDesc elementType) : base(rawType)
+    {
+        ElementType = elementType;
+    }
+
+    public override string ToString() => $"{ElementType}[]";
+}
+
+public class NullableTypeDesc : TypeDesc
+{
+    public TypeDesc ElementType;
+
+    public NullableTypeDesc(Type rawType, TypeDesc elementType) : base(rawType)
+    {
+        ElementType = elementType;
+    }
+
+    public override string ToString() => $"{ElementType} (nullable)";
+}
+
+public interface IDeclaredTypeDesc
+{
+    string TsName { get; set; }
+    string TsNamespace { get; set; }
+}
+
+public class EnumTypeDesc : TypeDesc, IDeclaredTypeDesc
+{
+    public string TsName { get; set; }
+    public string TsNamespace { get; set; }
     public List<EnumValueDesc> Values = new();
     public bool IsFlags;
 
@@ -127,10 +140,12 @@ public class EnumValueDesc
     }
 }
 
-public class CompositeTypeDesc : TypeDesc
+public class CompositeTypeDesc : TypeDesc, IDeclaredTypeDesc
 {
+    public string TsName { get; set; }
+    public string TsNamespace { get; set; }
     public List<PropertyDesc> Properties = new();
-    public List<TypeRef> Extends = new();
+    public List<CompositeTypeDesc> Extends = new();
 
     public override string ToString() => $"{RawType.FullName} (composite)";
 
@@ -144,7 +159,7 @@ public class CompositeTypeDesc : TypeDesc
 public class PropertyDesc
 {
     public string Name;
-    public TypeRef Type;
+    public TypeDesc Type;
 
     public override string ToString() => $"{Name}: {Type}";
 }
