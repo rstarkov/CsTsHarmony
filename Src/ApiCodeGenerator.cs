@@ -12,6 +12,7 @@ public class ApiCodeGenerator
     public Func<string, string> ServiceClassName = n => n + "Service";
     public string ServiceClassExtends = "ApiServiceBase";
     public string ServiceOptionsType = "ApiServiceOptions";
+    public string ImportFrom = null;
     public string ReturnTypeTemplate = "Promise<{0}>";
     public string Fetcher = "fetchJson";
     public Dictionary<Type, string> CustomFetchers = new() { [typeof(void)] = "fetchVoid", [typeof(string)] = "fetchString" };
@@ -23,8 +24,8 @@ public class ApiCodeGenerator
 
     public void Output(TypeScriptWriter writer)
     {
-        foreach (var imp in Imports)
-            writer.Imports.Add(imp);
+        if (ImportFrom != null)
+            writer.Imports.Add($"import {{ {ServiceClassExtends}, {ServiceOptionsType} }} from '{ImportFrom}';");
 
         writer.WriteLine($"export class {ServicesClassName} {{");
         using (writer.Indent())
