@@ -27,6 +27,7 @@ public class MethodDesc
     public RouteTemplate UrlTemplate; // if we were going for full abstraction this would have to be wrapped into a *Desc class but we're not
     public string HttpMethod;
     public BodyEncoding BodyEncoding;
+    public string Fetcher;
 
     public override string ToString() => $"{Method.Name} on {Service}";
 

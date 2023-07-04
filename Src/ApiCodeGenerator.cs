@@ -12,8 +12,6 @@ public class TsServiceGenerator
     public string ServiceOptionsType = "ApiServiceOptions";
     public string ImportFrom = null;
     public string ReturnTypeTemplate = "Promise<{0}>";
-    public string Fetcher = "fetchJson";
-    public Dictionary<Type, string> CustomFetchers = new() { [typeof(void)] = "fetchVoid", [typeof(string)] = "fetchString" };
 
     public void Output(TypeScriptWriter writer, IEnumerable<ServiceDesc> services)
     {
@@ -55,7 +53,7 @@ public class TsServiceGenerator
             {
                 foreach (var method in s.Methods.OrderBy(m => m.TgtName))
                 {
-                    var url = ApiGeneratorHelper.MethodUrlTemplateString(method, val => "${encodeURIComponent('' + " + val + ")}");
+                    var url = HarmonyUtil.MethodUrlTemplateString(method, val => "${encodeURIComponent('' + " + val + ")}");
                     writer.WriteLine($"{method.TgtName}: ({getMethodParams(method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString))}): string => `{url}`,");
                 }
             }
@@ -121,13 +119,10 @@ public class TsServiceGenerator
                     }
 
                     // Output call
-                    var getter = Fetcher;
-                    if (CustomFetchers.ContainsKey(method.ReturnType.SrcType))
-                        getter = CustomFetchers[method.ReturnType.SrcType];
                     if (canDirectReturn)
-                        writer.WriteLine($"return this.{getter}(url, {{ {fetchOpts} }}) as Promise<{TypeScriptWriter.TypeSignature(method.ReturnType, "")}>;");
+                        writer.WriteLine($"return this.{method.Fetcher}(url, {{ {fetchOpts} }}) as Promise<{TypeScriptWriter.TypeSignature(method.ReturnType, "")}>;");
                     else
-                        writer.WriteLine($"let result = await this.{getter}(url, {{ {fetchOpts} }}) as {TypeScriptWriter.TypeSignature(method.ReturnType, "")};");
+                        writer.WriteLine($"let result = await this.{method.Fetcher}(url, {{ {fetchOpts} }}) as {TypeScriptWriter.TypeSignature(method.ReturnType, "")};");
 
                     if (!canDirectReturn)
                     {
@@ -451,7 +446,7 @@ public class CsTestClientGenerator
                 using (writer.Indent())
                 {
                     foreach (var method in svc.Methods.OrderBy(m => m.TgtName))
-                        writer.WriteLine($"public static string {method.TgtName}({getMethodParams(method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString))}) => $\"{ApiGeneratorHelper.MethodUrlTemplateString(method, val => "{UrlEncode(" + val + ")}")}\";");
+                        writer.WriteLine($"public static string {method.TgtName}({getMethodParams(method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString))}) => $\"{HarmonyUtil.MethodUrlTemplateString(method, val => "{UrlEncode(" + val + ")}")}\";");
                 }
                 writer.WriteLine("}");
                 writer.WriteLine();
@@ -488,9 +483,9 @@ public class CsTestClientGenerator
                                 throw new Exception($"Unexpected {nameof(method.BodyEncoding)}: {method.BodyEncoding}");
                         }
 
-                        var getter = $"FetchJson<{method.ReturnType}>";
-                        if (method.ReturnType.SrcType == typeof(string)) getter = "FetchString";
-                        else if (method.ReturnType.SrcType == typeof(void)) getter = "FetchVoid";
+                        var getter = method.Fetcher[..1].ToUpper() + method.Fetcher[1..];
+                        if (getter == "FetchJson")
+                            getter = $"FetchJson<{method.ReturnType}>";
                         writer.WriteLine($"return {getter}(url, \"{method.HttpMethod}\", {content});");
                     }
                     writer.WriteLine("}");
@@ -527,37 +522,5 @@ public class CsTestClientGenerator
         if (type.SrcType == typeof(string)) return "string";
         if (type.SrcType == typeof(int)) return "int";
         return type.ToString();
-    }
-}
-
-internal static class ApiGeneratorHelper
-{
-    public static string MethodUrlTemplateString(MethodDesc method, Func<string, string> urlEncodeInString)
-    {
-        var url = new StringBuilder();
-        bool first = true;
-        foreach (var segment in method.UrlTemplate.Segments)
-        {
-            if (first)
-                first = false;
-            else
-                url.Append('/');
-            if (!segment.IsSimple)
-                throw new NotImplementedException(); // need a test case to implement this
-            if (segment.Parts[0].IsLiteral)
-                url.Append(segment.Parts[0].Text);
-            else if (segment.Parts[0].IsParameter)
-                url.Append(urlEncodeInString(segment.Parts[0].Name));
-            else
-                throw new NotImplementedException(); // need a test case to implement this
-        }
-        first = true;
-        foreach (var p in method.Parameters.Where(p => p.Location == ParameterLocation.QueryString).OrderBy(p => p.RequestName))
-        {
-            url.Append(first ? '?' : '&');
-            url.Append(p.RequestName + "=" + urlEncodeInString(p.TgtName));
-            first = false;
-        }
-        return url.ToString();
     }
 }

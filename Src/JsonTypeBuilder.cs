@@ -63,26 +63,10 @@ public class JsonTypeBuilder
 
     public TypeDesc AddType(Type type)
     {
-        type = UnwrapType(type);
+        type = HarmonyUtil.UnwrapType(type);
         if (!_types.ContainsKey(type))
             _types[type] = MapBasicType(type) ?? MapArrayType(type) ?? MapNullableType(type) ?? MapEnumType(type) ?? MapCompositeType(type); // or null
         return _types[type];
-    }
-
-    // it's not recursive; we don't expect or support nesting - but Task<ActionResult> is supported
-    protected virtual Type UnwrapType(Type type)
-    {
-        if (type == typeof(Task))
-            type = typeof(void);
-        else if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Task<>))
-            type = type.GetGenericArguments()[0];
-
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ActionResult<>))
-            type = type.GetGenericArguments()[0];
-        else if (type == typeof(ActionResult) || type.IsAssignableTo(typeof(IActionResult)) || type.IsAssignableTo(typeof(IConvertToActionResult)))
-            type = typeof(object);
-
-        return type;
     }
 
     protected virtual TypeDesc MapBasicType(Type type)

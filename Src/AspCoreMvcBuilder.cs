@@ -13,6 +13,7 @@ public class AspCoreMvcBuilder
     public JsonTypeBuilder TypeBuilder;
     public IgnoreConfig<Type> IgnoreControllers = new();
     public IgnoreConfig<MethodInfo> IgnoreMethods = new();
+    public Func<Type, string> GetFetcher = t => t == typeof(void) ? "fetchVoid" : t == typeof(string) ? "fetchString" : "fetchJson";
 
     public Func<string, string> ControllerRenamer = name => name.Replace("Controller", "");
 
@@ -92,6 +93,7 @@ public class AspCoreMvcBuilder
                 ReturnType = TypeBuilder.AddType(cad.MethodInfo.ReturnType),
                 UrlTemplate = TemplateParser.Parse(cad.AttributeRouteInfo.Template),
                 BodyEncoding = BodyEncoding.Json,
+                Fetcher = GetFetcher(HarmonyUtil.UnwrapType(cad.MethodInfo.ReturnType)),
             };
             var badParam = cad.Parameters.FirstOrDefault(p => p.BindingInfo.BindingSource.IsFromRequest && !_paramLocations.ContainsKey(p.BindingInfo.BindingSource.Id));
             if (badParam != null)

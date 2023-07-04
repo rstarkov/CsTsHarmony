@@ -1,8 +1,57 @@
 ﻿using System.Text;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 
 namespace CsTsHarmony;
 
-static class ExtensionMethods
+public static class HarmonyUtil
+{
+    public static string MethodUrlTemplateString(MethodDesc method, Func<string, string> urlEncodeInString)
+    {
+        var url = new StringBuilder();
+        bool first = true;
+        foreach (var segment in method.UrlTemplate.Segments)
+        {
+            if (first)
+                first = false;
+            else
+                url.Append('/');
+            if (!segment.IsSimple)
+                throw new NotImplementedException(); // need a test case to implement this
+            if (segment.Parts[0].IsLiteral)
+                url.Append(segment.Parts[0].Text);
+            else if (segment.Parts[0].IsParameter)
+                url.Append(urlEncodeInString(segment.Parts[0].Name));
+            else
+                throw new NotImplementedException(); // need a test case to implement this
+        }
+        first = true;
+        foreach (var p in method.Parameters.Where(p => p.Location == ParameterLocation.QueryString).OrderBy(p => p.RequestName))
+        {
+            url.Append(first ? '?' : '&');
+            url.Append(p.RequestName + "=" + urlEncodeInString(p.TgtName));
+            first = false;
+        }
+        return url.ToString();
+    }
+
+    public static Type UnwrapType(Type type)
+    {
+        if (type == typeof(Task))
+            type = typeof(void);
+        else if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Task<>))
+            type = type.GetGenericArguments()[0];
+
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ActionResult<>))
+            type = type.GetGenericArguments()[0];
+        else if (type == typeof(ActionResult) || type.IsAssignableTo(typeof(IActionResult)) || type.IsAssignableTo(typeof(IConvertToActionResult)))
+            type = typeof(object);
+
+        return type;
+    }
+}
+
+internal static class ExtensionMethods
 {
     public static IEnumerable<T> Order<T>(this IEnumerable<T> source)
     {
