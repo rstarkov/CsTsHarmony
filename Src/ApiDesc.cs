@@ -3,11 +3,6 @@ using Microsoft.AspNetCore.Routing.Template;
 
 namespace CsTsHarmony;
 
-public class ApiDesc
-{
-    public List<ServiceDesc> Services = new();
-}
-
 public class ServiceDesc
 {
     public string TsName;

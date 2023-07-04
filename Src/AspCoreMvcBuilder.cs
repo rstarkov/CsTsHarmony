@@ -9,7 +9,7 @@ namespace CsTsHarmony;
 
 public class AspCoreMvcBuilder
 {
-    public ApiDesc Api = new();
+    public List<ServiceDesc> Services = new();
     public JsonTypeBuilder TypeBuilder;
     public IgnoreConfig<Type> IgnoreControllers = new();
     public IgnoreConfig<MethodInfo> IgnoreMethods = new();
@@ -29,7 +29,7 @@ public class AspCoreMvcBuilder
             addControllerActionDescriptor(cad);
 
         // Rename duplicate/overloaded methods
-        foreach (var s in Api.Services)
+        foreach (var s in Services)
         {
             var existing = s.Methods.Select(m => m.TsName).ToHashSet();
             foreach (var grp in s.Methods.GroupBy(g => g.TsName).Where(g => g.Count() > 1))
@@ -51,12 +51,12 @@ public class AspCoreMvcBuilder
     {
         if (!IgnoreControllers.Include(controllerType))
             return null;
-        var svc = Api.Services.FirstOrDefault(s => s.ControllerType == controllerType);
+        var svc = Services.FirstOrDefault(s => s.ControllerType == controllerType);
         if (svc != null)
             return svc;
         svc = new ServiceDesc(controllerType);
         svc.TsName = ControllerRenamer(controllerType.Name);
-        Api.Services.Add(svc);
+        Services.Add(svc);
         return svc;
     }
 
