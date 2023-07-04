@@ -5,7 +5,7 @@ namespace CsTsHarmony;
 
 public class ServiceDesc
 {
-    public string TsName;
+    public string TgtName;
     public Type ControllerType { get; }
     public List<MethodDesc> Methods = new();
 
@@ -19,7 +19,7 @@ public class ServiceDesc
 
 public class MethodDesc
 {
-    public string TsName;
+    public string TgtName;
     public MethodInfo Method { get; }
     public ServiceDesc Service { get; }
     public TypeDesc ReturnType;
@@ -39,7 +39,9 @@ public class MethodDesc
 
 public class MethodParameterDesc
 {
-    public string TsName;
+    /// <summary>Name of the parameter in the generated code. Can be changed arbitrarily.</summary>
+    public string TgtName;
+    /// <summary>Name of the parameter as expected by the server. Changing to the wrong value will break the calls.</summary>
     public string RequestName;
     public MethodDesc Method { get; }
     public TypeDesc Type;
@@ -54,23 +56,23 @@ public class MethodParameterDesc
 
 public abstract class TypeDesc
 {
-    public Type RawType { get; }
+    public Type SrcType { get; }
 
-    public TypeDesc(Type rawType)
+    public TypeDesc(Type srcType)
     {
-        RawType = rawType;
+        SrcType = srcType;
     }
 }
 
 public class BasicTypeDesc : TypeDesc
 {
-    public string TsType;
-    public override string ToString() => $"{TsType} ({RawType.Name})";
+    public string TgtType;
+    public override string ToString() => $"{TgtType} ({SrcType.Name})";
     public ITypeConverter TsConverter;
 
-    public BasicTypeDesc(Type rawType, string tsType) : base(rawType)
+    public BasicTypeDesc(Type srcType, string tgtType) : base(srcType)
     {
-        TsType = tsType;
+        TgtType = tgtType;
     }
 }
 
@@ -78,7 +80,7 @@ public class ArrayTypeDesc : TypeDesc
 {
     public TypeDesc ElementType;
 
-    public ArrayTypeDesc(Type rawType, TypeDesc elementType) : base(rawType)
+    public ArrayTypeDesc(Type srcType, TypeDesc elementType) : base(srcType)
     {
         ElementType = elementType;
     }
@@ -90,7 +92,7 @@ public class NullableTypeDesc : TypeDesc
 {
     public TypeDesc ElementType;
 
-    public NullableTypeDesc(Type rawType, TypeDesc elementType) : base(rawType)
+    public NullableTypeDesc(Type srcType, TypeDesc elementType) : base(srcType)
     {
         ElementType = elementType;
     }
@@ -100,23 +102,23 @@ public class NullableTypeDesc : TypeDesc
 
 public interface IDeclaredTypeDesc
 {
-    string TsName { get; set; }
-    string TsNamespace { get; set; }
+    string TgtName { get; set; }
+    string TgtNamespace { get; set; }
 }
 
 public class EnumTypeDesc : TypeDesc, IDeclaredTypeDesc
 {
-    public string TsName { get; set; }
-    public string TsNamespace { get; set; }
+    public string TgtName { get; set; }
+    public string TgtNamespace { get; set; }
     public List<EnumValueDesc> Values = new();
     public bool IsFlags;
 
-    public override string ToString() => $"{RawType.FullName} (enum)";
+    public override string ToString() => $"{SrcType.FullName} (enum)";
 
-    public EnumTypeDesc(Type rawType) : base(rawType)
+    public EnumTypeDesc(Type srcType) : base(srcType)
     {
-        TsName = rawType.Name;
-        TsNamespace = rawType.Namespace;
+        TgtName = srcType.Name;
+        TgtNamespace = srcType.Namespace;
     }
 }
 
@@ -137,17 +139,17 @@ public class EnumValueDesc
 
 public class CompositeTypeDesc : TypeDesc, IDeclaredTypeDesc
 {
-    public string TsName { get; set; }
-    public string TsNamespace { get; set; }
+    public string TgtName { get; set; }
+    public string TgtNamespace { get; set; }
     public List<PropertyDesc> Properties = new();
     public List<CompositeTypeDesc> Extends = new();
 
-    public override string ToString() => $"{RawType.FullName} (composite)";
+    public override string ToString() => $"{SrcType.FullName} (composite)";
 
-    public CompositeTypeDesc(Type rawType) : base(rawType)
+    public CompositeTypeDesc(Type srcType) : base(srcType)
     {
-        TsName = rawType.Name;
-        TsNamespace = rawType.Namespace;
+        TgtName = srcType.Name;
+        TgtNamespace = srcType.Namespace;
     }
 }
 

@@ -35,7 +35,7 @@ public class AspCoreMvcBuilder
         // this is needed primarily because Typescript doesn't have overloading, but also because a single method may allow multiple HTTP methods
         foreach (var s in Services)
         {
-            var existing = s.Methods.Select(m => m.TsName).ToHashSet();
+            var existing = s.Methods.Select(m => m.TgtName).ToHashSet();
             string unique(string name)
             {
                 if (!existing.Contains(name))
@@ -46,11 +46,11 @@ public class AspCoreMvcBuilder
                 return $"{name}_{num}";
             }
 
-            foreach (var grp in s.Methods.GroupBy(m => m.TsName).Where(g => g.Count() > 1))
+            foreach (var grp in s.Methods.GroupBy(m => m.TgtName).Where(g => g.Count() > 1))
                 foreach (var method in grp)
                 {
-                    method.TsName = unique(method.TsName + method.HttpMethod[..1].ToUpper() + method.HttpMethod[1..].ToLower());
-                    existing.Add(method.TsName);
+                    method.TgtName = unique(method.TgtName + method.HttpMethod[..1].ToUpper() + method.HttpMethod[1..].ToLower());
+                    existing.Add(method.TgtName);
                 }
         }
     }
@@ -63,7 +63,7 @@ public class AspCoreMvcBuilder
         if (svc != null)
             return svc;
         svc = new ServiceDesc(controllerType);
-        svc.TsName = ControllerRenamer(controllerType.Name);
+        svc.TgtName = ControllerRenamer(controllerType.Name);
         Services.Add(svc);
         return svc;
     }
@@ -87,7 +87,7 @@ public class AspCoreMvcBuilder
         {
             var md = new MethodDesc(cad.MethodInfo, svc)
             {
-                TsName = cad.ActionName,
+                TgtName = cad.ActionName,
                 HttpMethod = httpMethod,
                 ReturnType = TypeBuilder.AddType(cad.MethodInfo.ReturnType),
                 UrlTemplate = TemplateParser.Parse(cad.AttributeRouteInfo.Template),
@@ -103,7 +103,7 @@ public class AspCoreMvcBuilder
                 .Where(p => p.BindingInfo.BindingSource.IsFromRequest)
                 .Select(p => new MethodParameterDesc(md)
                 {
-                    TsName = p.Name,
+                    TgtName = p.Name,
                     RequestName = p.Name,
                     Type = TypeBuilder.AddType(p.ParameterType),
                     Location = _paramLocations[p.BindingInfo.BindingSource.Id],

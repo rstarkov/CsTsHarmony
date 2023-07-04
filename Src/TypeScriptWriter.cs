@@ -116,11 +116,11 @@ public class TypeScriptWriter : CodeWriter
     public static string TypeSignature(TypeDesc type, string fromNamespace)
     {
         if (type is BasicTypeDesc bt)
-            return bt.TsType;
+            return bt.TgtType;
         else if (type is EnumTypeDesc et)
-            return fromNamespace == et.TsNamespace ? et.TsName : $"{et.TsNamespace}.{et.TsName}";
+            return fromNamespace == et.TgtNamespace ? et.TgtName : $"{et.TgtNamespace}.{et.TgtName}";
         else if (type is CompositeTypeDesc ct)
-            return fromNamespace == ct.TsNamespace ? ct.TsName : $"{ct.TsNamespace}.{ct.TsName}";
+            return fromNamespace == ct.TgtNamespace ? ct.TgtName : $"{ct.TgtNamespace}.{ct.TgtName}";
         else if (type is NullableTypeDesc nt)
             return $"{TypeSignature(nt.ElementType, fromNamespace)} | null";
         else if (type is ArrayTypeDesc at)

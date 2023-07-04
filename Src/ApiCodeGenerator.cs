@@ -23,20 +23,20 @@ public class TsServiceGenerator
         writer.WriteLine($"export class {ServicesClassName} {{");
         using (writer.Indent())
         {
-            foreach (var svc in services.OrderBy(s => s.TsName))
-                writer.WriteLine($"public readonly {svc.TsName}: {ServiceClassName(svc.TsName)};");
+            foreach (var svc in services.OrderBy(s => s.TgtName))
+                writer.WriteLine($"public readonly {svc.TgtName}: {ServiceClassName(svc.TgtName)};");
             writer.WriteLine();
             writer.WriteLine($"public constructor(options?: {ServiceOptionsType}) {{");
             using (writer.Indent())
             {
-                foreach (var svc in services.OrderBy(s => s.TsName))
-                    writer.WriteLine($"this.{svc.TsName} = new {ServiceClassName(svc.TsName)}(options);");
+                foreach (var svc in services.OrderBy(s => s.TgtName))
+                    writer.WriteLine($"this.{svc.TgtName} = new {ServiceClassName(svc.TgtName)}(options);");
             }
             writer.WriteLine("}");
         }
         writer.WriteLine("}");
         writer.WriteLine();
-        foreach (var svc in services.OrderBy(s => s.TsName))
+        foreach (var svc in services.OrderBy(s => s.TgtName))
         {
             OutputService(writer, svc);
             writer.WriteLine();
@@ -46,17 +46,17 @@ public class TsServiceGenerator
 
     protected void OutputService(TypeScriptWriter writer, ServiceDesc s)
     {
-        writer.WriteLine($"export class {ServiceClassName(s.TsName)}{(ServiceClassExtends == null ? "" : $" extends {ServiceClassExtends}")} {{");
+        writer.WriteLine($"export class {ServiceClassName(s.TgtName)}{(ServiceClassExtends == null ? "" : $" extends {ServiceClassExtends}")} {{");
         writer.WriteLine();
         using (writer.Indent())
         {
             writer.WriteLine("public endpoints = {");
             using (writer.Indent())
             {
-                foreach (var method in s.Methods.OrderBy(m => m.TsName))
+                foreach (var method in s.Methods.OrderBy(m => m.TgtName))
                 {
                     var url = ApiGeneratorHelper.MethodUrlTemplateString(method, val => "${encodeURIComponent('' + " + val + ")}");
-                    writer.WriteLine($"{method.TsName}: ({getMethodParams(method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString))}): string => `{url}`,");
+                    writer.WriteLine($"{method.TgtName}: ({getMethodParams(method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString))}): string => `{url}`,");
                 }
             }
             writer.WriteLine("};");
@@ -67,52 +67,52 @@ public class TsServiceGenerator
                 writer.WriteLine("super(options);");
                 writer.WriteLine();
 
-                foreach (var method in s.Methods.OrderBy(m => m.TsName))
-                    writer.WriteLine($"this.{method.TsName} = this.{method.TsName}.bind(this);");
+                foreach (var method in s.Methods.OrderBy(m => m.TgtName))
+                    writer.WriteLine($"this.{method.TgtName} = this.{method.TgtName}.bind(this);");
             }
             writer.WriteLine("}");
             writer.WriteLine();
-            foreach (var method in s.Methods.OrderBy(m => m.TsName))
+            foreach (var method in s.Methods.OrderBy(m => m.TgtName))
             {
                 bool canDirectReturn = !ConverterManager.NeedsConversion(method.ReturnType);
-                writer.Write($"public {(canDirectReturn ? "" : "async ")}{method.TsName}(");
+                writer.Write($"public {(canDirectReturn ? "" : "async ")}{method.TgtName}(");
                 writer.Write(getMethodParams(method.Parameters));
                 writer.WriteLine($"): {string.Format(ReturnTypeTemplate, TypeScriptWriter.TypeSignature(method.ReturnType, ""))} {{");
                 using (writer.Indent())
                 {
-                    writer.WriteLine($"let url = this.endpoints.{method.TsName}({method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString).Select(p => p.TsName).JoinString(", ")});");
+                    writer.WriteLine($"let url = this.endpoints.{method.TgtName}({method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString).Select(p => p.TgtName).JoinString(", ")});");
 
                     // Output parameter type conversions
                     foreach (var p in method.Parameters)
-                        ConverterManager.OutputTypeConversion(writer, p.TsName, p.Type, toTypeScript: false);
+                        ConverterManager.OutputTypeConversion(writer, p.TgtName, p.Type, toTypeScript: false);
 
                     // Build request body
-                    var bodyParams = method.Parameters.Where(p => p.Location == ParameterLocation.RequestBody).OrderBy(p => p.TsName).ToList();
+                    var bodyParams = method.Parameters.Where(p => p.Location == ParameterLocation.RequestBody).OrderBy(p => p.TgtName).ToList();
                     if (bodyParams.Count > 1 && (method.BodyEncoding == BodyEncoding.Raw || method.BodyEncoding == BodyEncoding.Json))
-                        throw new InvalidOperationException($"The body encoding for this method allows for at most one body parameter. Offending parameters: [{bodyParams.Select(p => p.TsName).JoinString(", ")}], method {method.Method.Name}, controller {s.ControllerType.FullName}");
+                        throw new InvalidOperationException($"The body encoding for this method allows for at most one body parameter. Offending parameters: [{bodyParams.Select(p => p.TgtName).JoinString(", ")}], method {method.Method.Name}, controller {s.ControllerType.FullName}");
                     var fetchOpts = $"method: '{method.HttpMethod.ToUpper()}'";
                     if (bodyParams.Count > 0)
                     {
                         if (method.BodyEncoding == BodyEncoding.Raw)
                         {
-                            fetchOpts += $", body: {bodyParams[0].TsName}";
+                            fetchOpts += $", body: {bodyParams[0].TgtName}";
                         }
                         else if (method.BodyEncoding == BodyEncoding.Json)
                         {
-                            fetchOpts += $", body: JSON.stringify({bodyParams[0].TsName}), headers: {{ 'Content-Type': 'application/json' }}";
+                            fetchOpts += $", body: JSON.stringify({bodyParams[0].TgtName}), headers: {{ 'Content-Type': 'application/json' }}";
                         }
                         else if (method.BodyEncoding == BodyEncoding.FormUrlEncoded)
                         {
                             writer.WriteLine("let __body = new URLSearchParams();");
                             foreach (var bp in bodyParams)
-                                writer.WriteLine($"__body.append('{bp.TsName}', '' + {bp.TsName});");
+                                writer.WriteLine($"__body.append('{bp.RequestName}', '' + {bp.TgtName});");
                             fetchOpts += ", body: __body";
                         }
                         else if (method.BodyEncoding == BodyEncoding.MultipartFormData)
                         {
                             writer.WriteLine("let __body = new FormData();");
                             foreach (var bp in bodyParams)
-                                writer.WriteLine($"__body.append('{bp.TsName}', '' + {bp.TsName});");
+                                writer.WriteLine($"__body.append('{bp.RequestName}', '' + {bp.TgtName});");
                             fetchOpts += ", body: __body";
                             throw new NotImplementedException("FormData encoding is not fully implemented."); // no support for file name, parameter is always stringified with no support for Blob
                         }
@@ -122,8 +122,8 @@ public class TsServiceGenerator
 
                     // Output call
                     var getter = Fetcher;
-                    if (CustomFetchers.ContainsKey(method.ReturnType.RawType))
-                        getter = CustomFetchers[method.ReturnType.RawType];
+                    if (CustomFetchers.ContainsKey(method.ReturnType.SrcType))
+                        getter = CustomFetchers[method.ReturnType.SrcType];
                     if (canDirectReturn)
                         writer.WriteLine($"return this.{getter}(url, {{ {fetchOpts} }}) as Promise<{TypeScriptWriter.TypeSignature(method.ReturnType, "")}>;");
                     else
@@ -151,7 +151,7 @@ public class TsServiceGenerator
         {
             if (!first)
                 sb.Append(", ");
-            sb.Append($"{p.TsName}{(p.Optional ? "?" : "")}: {TypeScriptWriter.TypeSignature(p.Type, "")}");
+            sb.Append($"{p.TgtName}{(p.Optional ? "?" : "")}: {TypeScriptWriter.TypeSignature(p.Type, "")}");
             first = false;
         }
         return sb.ToString();
@@ -180,7 +180,7 @@ public class TsTypeGenerator
         {
             var compositeTypes = _types.OfType<CompositeTypeDesc>();
             var enumTypes = _types.OfType<EnumTypeDesc>();
-            var namespaces = compositeTypes.Select(t => t.TsNamespace).Concat(enumTypes.Select(t => t.TsNamespace)).Distinct().Order();
+            var namespaces = compositeTypes.Select(t => t.TgtNamespace).Concat(enumTypes.Select(t => t.TgtNamespace)).Distinct().Order();
             foreach (var ns in namespaces)
             {
                 if (ns != "")
@@ -190,12 +190,12 @@ public class TsTypeGenerator
                 }
                 using (writer.Indent(ns != ""))
                 {
-                    foreach (var t in enumTypes.Where(t => t.TsNamespace == ns).OrderBy(t => t.TsName))
+                    foreach (var t in enumTypes.Where(t => t.TgtNamespace == ns).OrderBy(t => t.TgtName))
                     {
                         OutputEnumTypeDeclaration(writer, t);
                         writer.WriteLine();
                     }
-                    foreach (var t in compositeTypes.Where(t => t.TsNamespace == ns).OrderBy(t => t.TsName))
+                    foreach (var t in compositeTypes.Where(t => t.TgtNamespace == ns).OrderBy(t => t.TgtName))
                     {
                         OutputCompositeTypeDeclaration(writer, t);
                         writer.WriteLine();
@@ -214,22 +214,22 @@ public class TsTypeGenerator
 
     protected virtual void OutputEnumTypeDeclaration(TypeScriptWriter writer, EnumTypeDesc e)
     {
-        writer.WriteLine($"type {e.TsName} = {e.Values.Select(v => v.Name).Order().JoinString(" | ", "\"", "\"")};");
+        writer.WriteLine($"type {e.TgtName} = {e.Values.Select(v => v.Name).Order().JoinString(" | ", "\"", "\"")};");
     }
 
     protected virtual void OutputCompositeTypeDeclaration(TypeScriptWriter writer, CompositeTypeDesc ct)
     {
-        writer.Write($"interface {ct.TsName}");
+        writer.Write($"interface {ct.TgtName}");
         if (ct.Extends.Any())
         {
             writer.Write(" extends ");
-            writer.Write(ct.Extends.Select(t => TypeScriptWriter.TypeSignature(t, ct.TsNamespace)).Order().JoinString(", "));
+            writer.Write(ct.Extends.Select(t => TypeScriptWriter.TypeSignature(t, ct.TgtNamespace)).Order().JoinString(", "));
         }
         writer.WriteLine(" {");
         using (writer.Indent())
         {
             foreach (var prop in ct.Properties.OrderBy(p => p.Name))
-                writer.WriteLine($"{prop.Name}: {TypeScriptWriter.TypeSignature(prop.Type, ct.TsNamespace)};");
+                writer.WriteLine($"{prop.Name}: {TypeScriptWriter.TypeSignature(prop.Type, ct.TgtNamespace)};");
         }
         writer.WriteLine("}");
     }
@@ -391,7 +391,7 @@ public class TsTypeConverterManager
         else if (type is ArrayTypeDesc at)
             return GetConverterName(at.ElementType) + "Array";
         else
-            return type.RawType.FullName.Replace(".", "");
+            return type.SrcType.FullName.Replace(".", "");
     }
 
     private string GetConverterFunctionName(TypeDesc type, bool toTypeScript) => DecorateConverterName(GetConverterName(type), toTypeScript);
@@ -428,13 +428,13 @@ public class CsTestClientGenerator
         using (writer.Indent())
         {
             foreach (var svc in services)
-                writer.WriteLine($"public {svc.TsName}Service {svc.TsName};");
+                writer.WriteLine($"public {svc.TgtName}Service {svc.TgtName};");
             writer.WriteLine();
             writer.WriteLine($"public {ServicesClass}(ApiServiceOptions options)");
             writer.WriteLine("{");
             using (writer.Indent())
                 foreach (var svc in services)
-                    writer.WriteLine($"{svc.TsName} = new(options);");
+                    writer.WriteLine($"{svc.TgtName} = new(options);");
             writer.WriteLine("}");
         }
         writer.WriteLine("}");
@@ -442,7 +442,7 @@ public class CsTestClientGenerator
 
         foreach (var svc in services)
         {
-            writer.WriteLine($"{ClassAccessibility} class {svc.TsName}Service : ApiServiceBase");
+            writer.WriteLine($"{ClassAccessibility} class {svc.TgtName}Service : ApiServiceBase");
             writer.WriteLine("{");
             using (writer.Indent())
             {
@@ -450,36 +450,36 @@ public class CsTestClientGenerator
                 writer.WriteLine("{");
                 using (writer.Indent())
                 {
-                    foreach (var method in svc.Methods.OrderBy(m => m.TsName))
-                        writer.WriteLine($"public static string {method.TsName}({getMethodParams(method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString))}) => $\"{ApiGeneratorHelper.MethodUrlTemplateString(method, val => "{UrlEncode(" + val + ")}")}\";");
+                    foreach (var method in svc.Methods.OrderBy(m => m.TgtName))
+                        writer.WriteLine($"public static string {method.TgtName}({getMethodParams(method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString))}) => $\"{ApiGeneratorHelper.MethodUrlTemplateString(method, val => "{UrlEncode(" + val + ")}")}\";");
                 }
                 writer.WriteLine("}");
                 writer.WriteLine();
-                writer.WriteLine($"public {svc.TsName}Service(ApiServiceOptions options) : base(options)");
+                writer.WriteLine($"public {svc.TgtName}Service(ApiServiceOptions options) : base(options)");
                 writer.WriteLine("{");
                 writer.WriteLine("}");
                 writer.WriteLine();
-                foreach (var method in svc.Methods.OrderBy(m => m.TsName))
+                foreach (var method in svc.Methods.OrderBy(m => m.TgtName))
                 {
-                    writer.Write($"public {getCsTaskType(method.ReturnType)} {method.TsName}(");
+                    writer.Write($"public {getCsTaskType(method.ReturnType)} {method.TgtName}(");
                     writer.Write(getMethodParams(method.Parameters));
                     writer.WriteLine(")");
                     writer.WriteLine("{");
                     using (writer.Indent())
                     {
-                        writer.WriteLine($"var url = Endpoints.{method.TsName}({method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString).Select(p => p.TsName).JoinString(", ")});");
+                        writer.WriteLine($"var url = Endpoints.{method.TgtName}({method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString).Select(p => p.TgtName).JoinString(", ")});");
                         //writer.WriteLine($"var url = $\"{Helper.MethodUrlTemplateString(method, val => "{UrlEncode(" + val + ")}")}\";");
 
-                        var bodyParams = method.Parameters.Where(p => p.Location == ParameterLocation.RequestBody).OrderBy(p => p.TsName).ToList();
+                        var bodyParams = method.Parameters.Where(p => p.Location == ParameterLocation.RequestBody).OrderBy(p => p.TgtName).ToList();
                         if (bodyParams.Count > 1 && (method.BodyEncoding == BodyEncoding.Raw || method.BodyEncoding == BodyEncoding.Json))
-                            throw new InvalidOperationException($"The body encoding for this method allows for at most one body parameter. Offending parameters: [{bodyParams.Select(p => p.TsName).JoinString(", ")}], method {method.Method.Name}, controller {svc.ControllerType.FullName}");
+                            throw new InvalidOperationException($"The body encoding for this method allows for at most one body parameter. Offending parameters: [{bodyParams.Select(p => p.TgtName).JoinString(", ")}], method {method.Method.Name}, controller {svc.ControllerType.FullName}");
                         var content = "null";
                         if (bodyParams.Count > 0)
                         {
                             if (method.BodyEncoding == BodyEncoding.Raw)
-                                content = $"RawContent({bodyParams[0].TsName})";
+                                content = $"RawContent({bodyParams[0].TgtName})";
                             else if (method.BodyEncoding == BodyEncoding.Json)
-                                content = $"JsonContent({bodyParams[0].TsName})";
+                                content = $"JsonContent({bodyParams[0].TgtName})";
                             else if (method.BodyEncoding == BodyEncoding.FormUrlEncoded)
                                 throw new NotImplementedException();
                             else if (method.BodyEncoding == BodyEncoding.MultipartFormData)
@@ -489,8 +489,8 @@ public class CsTestClientGenerator
                         }
 
                         var getter = $"FetchJson<{method.ReturnType}>";
-                        if (method.ReturnType.RawType == typeof(string)) getter = "FetchString";
-                        else if (method.ReturnType.RawType == typeof(void)) getter = "FetchVoid";
+                        if (method.ReturnType.SrcType == typeof(string)) getter = "FetchString";
+                        else if (method.ReturnType.SrcType == typeof(void)) getter = "FetchVoid";
                         writer.WriteLine($"return {getter}(url, \"{method.HttpMethod}\", {content});");
                     }
                     writer.WriteLine("}");
@@ -509,7 +509,7 @@ public class CsTestClientGenerator
         {
             if (!first)
                 sb.Append(", ");
-            sb.Append($"{getCs(p.Type)} {p.TsName}{(p.Optional ? " = default" : "")}");
+            sb.Append($"{getCs(p.Type)} {p.TgtName}{(p.Optional ? " = default" : "")}");
             first = false;
         }
         return sb.ToString();
@@ -517,15 +517,15 @@ public class CsTestClientGenerator
 
     private string getCsTaskType(TypeDesc type)
     {
-        if (type.RawType == typeof(void)) return "Task";
+        if (type.SrcType == typeof(void)) return "Task";
         return $"Task<{getCs(type)}>";
     }
 
     private string getCs(TypeDesc type)
     {
-        if (type.RawType == typeof(void)) return "void";
-        if (type.RawType == typeof(string)) return "string";
-        if (type.RawType == typeof(int)) return "int";
+        if (type.SrcType == typeof(void)) return "void";
+        if (type.SrcType == typeof(string)) return "string";
+        if (type.SrcType == typeof(int)) return "int";
         return type.ToString();
     }
 }
@@ -552,10 +552,10 @@ internal static class ApiGeneratorHelper
                 throw new NotImplementedException(); // need a test case to implement this
         }
         first = true;
-        foreach (var p in method.Parameters.Where(p => p.Location == ParameterLocation.QueryString).OrderBy(p => p.TsName))
+        foreach (var p in method.Parameters.Where(p => p.Location == ParameterLocation.QueryString).OrderBy(p => p.RequestName))
         {
             url.Append(first ? '?' : '&');
-            url.Append(p.TsName + "=" + urlEncodeInString(p.TsName));
+            url.Append(p.RequestName + "=" + urlEncodeInString(p.TgtName));
             first = false;
         }
         return url.ToString();
