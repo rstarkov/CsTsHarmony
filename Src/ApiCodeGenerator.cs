@@ -54,11 +54,10 @@ public class TsServiceGenerator
             using (writer.Indent())
             {
                 foreach (var method in s.Methods.OrderBy(m => m.TsName))
-                    foreach (var httpMethod in method.HttpMethods.Order())
-                    {
-                        var url = ApiGeneratorHelper.MethodUrlTemplateString(method, val => "${encodeURIComponent('' + " + val + ")}");
-                        writer.WriteLine($"{getMethodName(method, httpMethod)}: ({getMethodParams(method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString))}): string => `{url}`,");
-                    }
+                {
+                    var url = ApiGeneratorHelper.MethodUrlTemplateString(method, val => "${encodeURIComponent('' + " + val + ")}");
+                    writer.WriteLine($"{method.TsName}: ({getMethodParams(method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString))}): string => `{url}`,");
+                }
             }
             writer.WriteLine("};");
             writer.WriteLine();
@@ -69,88 +68,79 @@ public class TsServiceGenerator
                 writer.WriteLine();
 
                 foreach (var method in s.Methods.OrderBy(m => m.TsName))
-                    foreach (var httpMethod in method.HttpMethods.Order())
-                        writer.WriteLine($"this.{getMethodName(method, httpMethod)} = this.{getMethodName(method, httpMethod)}.bind(this);");
+                    writer.WriteLine($"this.{method.TsName} = this.{method.TsName}.bind(this);");
             }
             writer.WriteLine("}");
             writer.WriteLine();
             foreach (var method in s.Methods.OrderBy(m => m.TsName))
             {
-                foreach (var httpMethod in method.HttpMethods.Order())
+                bool canDirectReturn = !ConverterManager.NeedsConversion(method.ReturnType);
+                writer.Write($"public {(canDirectReturn ? "" : "async ")}{method.TsName}(");
+                writer.Write(getMethodParams(method.Parameters));
+                writer.WriteLine($"): {string.Format(ReturnTypeTemplate, TypeScriptWriter.TypeSignature(method.ReturnType, ""))} {{");
+                using (writer.Indent())
                 {
-                    bool canDirectReturn = !ConverterManager.NeedsConversion(method.ReturnType);
-                    writer.Write($"public {(canDirectReturn ? "" : "async ")}{getMethodName(method, httpMethod)}(");
-                    writer.Write(getMethodParams(method.Parameters));
-                    writer.WriteLine($"): {string.Format(ReturnTypeTemplate, TypeScriptWriter.TypeSignature(method.ReturnType, ""))} {{");
-                    using (writer.Indent())
+                    writer.WriteLine($"let url = this.endpoints.{method.TsName}({method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString).Select(p => p.TsName).JoinString(", ")});");
+
+                    // Output parameter type conversions
+                    foreach (var p in method.Parameters)
+                        ConverterManager.OutputTypeConversion(writer, p.TsName, p.Type, toTypeScript: false);
+
+                    // Build request body
+                    var bodyParams = method.Parameters.Where(p => p.Location == ParameterLocation.RequestBody).OrderBy(p => p.TsName).ToList();
+                    if (bodyParams.Count > 1 && (method.BodyEncoding == BodyEncoding.Raw || method.BodyEncoding == BodyEncoding.Json))
+                        throw new InvalidOperationException($"The body encoding for this method allows for at most one body parameter. Offending parameters: [{bodyParams.Select(p => p.TsName).JoinString(", ")}], method {method.Method.Name}, controller {s.ControllerType.FullName}");
+                    var fetchOpts = $"method: '{method.HttpMethod.ToUpper()}'";
+                    if (bodyParams.Count > 0)
                     {
-                        writer.WriteLine($"let url = this.endpoints.{getMethodName(method, httpMethod)}({method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString).Select(p => p.TsName).JoinString(", ")});");
-
-                        // Output parameter type conversions
-                        foreach (var p in method.Parameters)
-                            ConverterManager.OutputTypeConversion(writer, p.TsName, p.Type, toTypeScript: false);
-
-                        // Build request body
-                        var bodyParams = method.Parameters.Where(p => p.Location == ParameterLocation.RequestBody).OrderBy(p => p.TsName).ToList();
-                        if (bodyParams.Count > 1 && (method.BodyEncoding == BodyEncoding.Raw || method.BodyEncoding == BodyEncoding.Json))
-                            throw new InvalidOperationException($"The body encoding for this method allows for at most one body parameter. Offending parameters: [{bodyParams.Select(p => p.TsName).JoinString(", ")}], method {method.Method.Name}, controller {s.ControllerType.FullName}");
-                        var fetchOpts = $"method: '{httpMethod.ToUpper()}'";
-                        if (bodyParams.Count > 0)
+                        if (method.BodyEncoding == BodyEncoding.Raw)
                         {
-                            if (method.BodyEncoding == BodyEncoding.Raw)
-                            {
-                                fetchOpts += $", body: {bodyParams[0].TsName}";
-                            }
-                            else if (method.BodyEncoding == BodyEncoding.Json)
-                            {
-                                fetchOpts += $", body: JSON.stringify({bodyParams[0].TsName}), headers: {{ 'Content-Type': 'application/json' }}";
-                            }
-                            else if (method.BodyEncoding == BodyEncoding.FormUrlEncoded)
-                            {
-                                writer.WriteLine("let __body = new URLSearchParams();");
-                                foreach (var bp in bodyParams)
-                                    writer.WriteLine($"__body.append('{bp.TsName}', '' + {bp.TsName});");
-                                fetchOpts += ", body: __body";
-                            }
-                            else if (method.BodyEncoding == BodyEncoding.MultipartFormData)
-                            {
-                                writer.WriteLine("let __body = new FormData();");
-                                foreach (var bp in bodyParams)
-                                    writer.WriteLine($"__body.append('{bp.TsName}', '' + {bp.TsName});");
-                                fetchOpts += ", body: __body";
-                                throw new NotImplementedException("FormData encoding is not fully implemented."); // no support for file name, parameter is always stringified with no support for Blob
-                            }
-                            else
-                                throw new Exception($"Unexpected {nameof(method.BodyEncoding)}: {method.BodyEncoding}");
+                            fetchOpts += $", body: {bodyParams[0].TsName}";
                         }
-
-                        // Output call
-                        var getter = Fetcher;
-                        if (CustomFetchers.ContainsKey(method.ReturnType.RawType))
-                            getter = CustomFetchers[method.ReturnType.RawType];
-                        if (canDirectReturn)
-                            writer.WriteLine($"return this.{getter}(url, {{ {fetchOpts} }}) as Promise<{TypeScriptWriter.TypeSignature(method.ReturnType, "")}>;");
+                        else if (method.BodyEncoding == BodyEncoding.Json)
+                        {
+                            fetchOpts += $", body: JSON.stringify({bodyParams[0].TsName}), headers: {{ 'Content-Type': 'application/json' }}";
+                        }
+                        else if (method.BodyEncoding == BodyEncoding.FormUrlEncoded)
+                        {
+                            writer.WriteLine("let __body = new URLSearchParams();");
+                            foreach (var bp in bodyParams)
+                                writer.WriteLine($"__body.append('{bp.TsName}', '' + {bp.TsName});");
+                            fetchOpts += ", body: __body";
+                        }
+                        else if (method.BodyEncoding == BodyEncoding.MultipartFormData)
+                        {
+                            writer.WriteLine("let __body = new FormData();");
+                            foreach (var bp in bodyParams)
+                                writer.WriteLine($"__body.append('{bp.TsName}', '' + {bp.TsName});");
+                            fetchOpts += ", body: __body";
+                            throw new NotImplementedException("FormData encoding is not fully implemented."); // no support for file name, parameter is always stringified with no support for Blob
+                        }
                         else
-                            writer.WriteLine($"let result = await this.{getter}(url, {{ {fetchOpts} }}) as {TypeScriptWriter.TypeSignature(method.ReturnType, "")};");
-
-                        if (!canDirectReturn)
-                        {
-                            // Output return type conversion
-                            ConverterManager.OutputTypeConversion(writer, "result", method.ReturnType, toTypeScript: true);
-                            writer.WriteLine("return result;");
-                        }
+                            throw new Exception($"Unexpected {nameof(method.BodyEncoding)}: {method.BodyEncoding}");
                     }
-                    writer.WriteLine("}");
-                    writer.WriteLine();
+
+                    // Output call
+                    var getter = Fetcher;
+                    if (CustomFetchers.ContainsKey(method.ReturnType.RawType))
+                        getter = CustomFetchers[method.ReturnType.RawType];
+                    if (canDirectReturn)
+                        writer.WriteLine($"return this.{getter}(url, {{ {fetchOpts} }}) as Promise<{TypeScriptWriter.TypeSignature(method.ReturnType, "")}>;");
+                    else
+                        writer.WriteLine($"let result = await this.{getter}(url, {{ {fetchOpts} }}) as {TypeScriptWriter.TypeSignature(method.ReturnType, "")};");
+
+                    if (!canDirectReturn)
+                    {
+                        // Output return type conversion
+                        ConverterManager.OutputTypeConversion(writer, "result", method.ReturnType, toTypeScript: true);
+                        writer.WriteLine("return result;");
+                    }
                 }
+                writer.WriteLine("}");
+                writer.WriteLine();
             }
         }
         writer.WriteLine("}");
-    }
-
-    private string getMethodName(MethodDesc method, string httpMethod)
-    {
-        return method.TsName + (method.HttpMethods.Count == 1 ? "" : httpMethod.Substring(0, 1) + httpMethod.Substring(1).ToLower());
     }
 
     private string getMethodParams(IEnumerable<MethodParameterDesc> parameters)
@@ -461,8 +451,7 @@ public class CsTestClientGenerator
                 using (writer.Indent())
                 {
                     foreach (var method in svc.Methods.OrderBy(m => m.TsName))
-                        foreach (var httpMethod in method.HttpMethods.Order())
-                            writer.WriteLine($"public static string {getMethodName(method, httpMethod)}({getMethodParams(method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString))}) => $\"{ApiGeneratorHelper.MethodUrlTemplateString(method, val => "{UrlEncode(" + val + ")}")}\";");
+                        writer.WriteLine($"public static string {method.TsName}({getMethodParams(method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString))}) => $\"{ApiGeneratorHelper.MethodUrlTemplateString(method, val => "{UrlEncode(" + val + ")}")}\";");
                 }
                 writer.WriteLine("}");
                 writer.WriteLine();
@@ -471,51 +460,45 @@ public class CsTestClientGenerator
                 writer.WriteLine("}");
                 writer.WriteLine();
                 foreach (var method in svc.Methods.OrderBy(m => m.TsName))
-                    foreach (var httpMethod in method.HttpMethods.Order())
+                {
+                    writer.Write($"public {getCsTaskType(method.ReturnType)} {method.TsName}(");
+                    writer.Write(getMethodParams(method.Parameters));
+                    writer.WriteLine(")");
+                    writer.WriteLine("{");
+                    using (writer.Indent())
                     {
-                        writer.Write($"public {getCsTaskType(method.ReturnType)} {getMethodName(method, httpMethod)}(");
-                        writer.Write(getMethodParams(method.Parameters));
-                        writer.WriteLine(")");
-                        writer.WriteLine("{");
-                        using (writer.Indent())
+                        writer.WriteLine($"var url = Endpoints.{method.TsName}({method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString).Select(p => p.TsName).JoinString(", ")});");
+                        //writer.WriteLine($"var url = $\"{Helper.MethodUrlTemplateString(method, val => "{UrlEncode(" + val + ")}")}\";");
+
+                        var bodyParams = method.Parameters.Where(p => p.Location == ParameterLocation.RequestBody).OrderBy(p => p.TsName).ToList();
+                        if (bodyParams.Count > 1 && (method.BodyEncoding == BodyEncoding.Raw || method.BodyEncoding == BodyEncoding.Json))
+                            throw new InvalidOperationException($"The body encoding for this method allows for at most one body parameter. Offending parameters: [{bodyParams.Select(p => p.TsName).JoinString(", ")}], method {method.Method.Name}, controller {svc.ControllerType.FullName}");
+                        var content = "null";
+                        if (bodyParams.Count > 0)
                         {
-                            writer.WriteLine($"var url = Endpoints.{getMethodName(method, httpMethod)}({method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString).Select(p => p.TsName).JoinString(", ")});");
-                            //writer.WriteLine($"var url = $\"{Helper.MethodUrlTemplateString(method, val => "{UrlEncode(" + val + ")}")}\";");
-
-                            var bodyParams = method.Parameters.Where(p => p.Location == ParameterLocation.RequestBody).OrderBy(p => p.TsName).ToList();
-                            if (bodyParams.Count > 1 && (method.BodyEncoding == BodyEncoding.Raw || method.BodyEncoding == BodyEncoding.Json))
-                                throw new InvalidOperationException($"The body encoding for this method allows for at most one body parameter. Offending parameters: [{bodyParams.Select(p => p.TsName).JoinString(", ")}], method {method.Method.Name}, controller {svc.ControllerType.FullName}");
-                            var content = "null";
-                            if (bodyParams.Count > 0)
-                            {
-                                if (method.BodyEncoding == BodyEncoding.Raw)
-                                    content = $"RawContent({bodyParams[0].TsName})";
-                                else if (method.BodyEncoding == BodyEncoding.Json)
-                                    content = $"JsonContent({bodyParams[0].TsName})";
-                                else if (method.BodyEncoding == BodyEncoding.FormUrlEncoded)
-                                    throw new NotImplementedException();
-                                else if (method.BodyEncoding == BodyEncoding.MultipartFormData)
-                                    throw new NotImplementedException("FormData encoding is not fully implemented.");
-                                else
-                                    throw new Exception($"Unexpected {nameof(method.BodyEncoding)}: {method.BodyEncoding}");
-                            }
-
-                            var getter = $"FetchJson<{method.ReturnType}>";
-                            if (method.ReturnType.RawType == typeof(string)) getter = "FetchString";
-                            else if (method.ReturnType.RawType == typeof(void)) getter = "FetchVoid";
-                            writer.WriteLine($"return {getter}(url, \"{httpMethod}\", {content});");
+                            if (method.BodyEncoding == BodyEncoding.Raw)
+                                content = $"RawContent({bodyParams[0].TsName})";
+                            else if (method.BodyEncoding == BodyEncoding.Json)
+                                content = $"JsonContent({bodyParams[0].TsName})";
+                            else if (method.BodyEncoding == BodyEncoding.FormUrlEncoded)
+                                throw new NotImplementedException();
+                            else if (method.BodyEncoding == BodyEncoding.MultipartFormData)
+                                throw new NotImplementedException("FormData encoding is not fully implemented.");
+                            else
+                                throw new Exception($"Unexpected {nameof(method.BodyEncoding)}: {method.BodyEncoding}");
                         }
-                        writer.WriteLine("}");
+
+                        var getter = $"FetchJson<{method.ReturnType}>";
+                        if (method.ReturnType.RawType == typeof(string)) getter = "FetchString";
+                        else if (method.ReturnType.RawType == typeof(void)) getter = "FetchVoid";
+                        writer.WriteLine($"return {getter}(url, \"{method.HttpMethod}\", {content});");
                     }
+                    writer.WriteLine("}");
+                }
             }
             writer.WriteLine("}");
             writer.WriteLine();
         }
-    }
-
-    private string getMethodName(MethodDesc method, string httpMethod)
-    {
-        return method.TsName + (method.HttpMethods.Count == 1 ? "" : httpMethod.Substring(0, 1) + httpMethod.Substring(1).ToLower());
     }
 
     private string getMethodParams(IEnumerable<MethodParameterDesc> parameters)

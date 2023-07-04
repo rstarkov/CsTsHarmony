@@ -25,7 +25,7 @@ public class MethodDesc
     public TypeDesc ReturnType;
     public List<MethodParameterDesc> Parameters = new();
     public RouteTemplate UrlTemplate; // if we were going for full abstraction this would have to be wrapped into a *Desc class but we're not
-    public List<string> HttpMethods = new List<string>();
+    public string HttpMethod;
     public BodyEncoding BodyEncoding;
 
     public override string ToString() => $"{Method.Name} on {Service}";

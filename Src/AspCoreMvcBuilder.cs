@@ -67,40 +67,42 @@ public class AspCoreMvcBuilder
         ["Body"] = ParameterLocation.RequestBody,
     };
 
-    private MethodDesc addControllerActionDescriptor(ControllerActionDescriptor cad)
+    private void addControllerActionDescriptor(ControllerActionDescriptor cad)
     {
         if (!IgnoreMethods.Include(cad.MethodInfo))
-            return null;
+            return;
         var controllerType = cad.ControllerTypeInfo.AsType();
         var svc = addController(controllerType);
         if (svc == null)
-            return null;
-        var md = new MethodDesc(cad.MethodInfo, svc)
+            return;
+        foreach (var httpMethod in cad.ActionConstraints?.OfType<HttpMethodActionConstraint>().FirstOrDefault()?.HttpMethods)
         {
-            TsName = cad.ActionName,
-            HttpMethods = cad.ActionConstraints?.OfType<HttpMethodActionConstraint>().FirstOrDefault()?.HttpMethods.ToList(),
-            ReturnType = TypeBuilder.AddType(cad.MethodInfo.ReturnType),
-            UrlTemplate = TemplateParser.Parse(cad.AttributeRouteInfo.Template),
-            BodyEncoding = BodyEncoding.Json,
-        };
-        var badParam = cad.Parameters.FirstOrDefault(p => p.BindingInfo.BindingSource.IsFromRequest && !_paramLocations.ContainsKey(p.BindingInfo.BindingSource.Id));
-        if (badParam != null)
-        {
-            DiagnosticLog.Add($"Skipping method {cad.MethodInfo.Name} on {controllerType.FullName} because parameter {badParam.Name} has BindingSource.Id={badParam.BindingInfo.BindingSource.Id}");
-            return null;
-        }
-        md.Parameters = cad.Parameters
-            .Where(p => p.BindingInfo.BindingSource.IsFromRequest)
-            .Select(p => new MethodParameterDesc(md)
+            var md = new MethodDesc(cad.MethodInfo, svc)
             {
-                TsName = p.Name,
-                RequestName = p.Name,
-                Type = TypeBuilder.AddType(p.ParameterType),
-                Location = _paramLocations[p.BindingInfo.BindingSource.Id],
-                Optional = p is ControllerParameterDescriptor cpd ? cpd.ParameterInfo.HasDefaultValue : false,
-            })
-            .ToList();
-        svc.Methods.Add(md);
-        return md;
+                TsName = cad.ActionName,
+                HttpMethod = httpMethod,
+                ReturnType = TypeBuilder.AddType(cad.MethodInfo.ReturnType),
+                UrlTemplate = TemplateParser.Parse(cad.AttributeRouteInfo.Template),
+                BodyEncoding = BodyEncoding.Json,
+            };
+            var badParam = cad.Parameters.FirstOrDefault(p => p.BindingInfo.BindingSource.IsFromRequest && !_paramLocations.ContainsKey(p.BindingInfo.BindingSource.Id));
+            if (badParam != null)
+            {
+                DiagnosticLog.Add($"Skipping method {cad.MethodInfo.Name} ({httpMethod}) on {controllerType.FullName} because parameter {badParam.Name} has BindingSource.Id={badParam.BindingInfo.BindingSource.Id}");
+                continue;
+            }
+            md.Parameters = cad.Parameters
+                .Where(p => p.BindingInfo.BindingSource.IsFromRequest)
+                .Select(p => new MethodParameterDesc(md)
+                {
+                    TsName = p.Name,
+                    RequestName = p.Name,
+                    Type = TypeBuilder.AddType(p.ParameterType),
+                    Location = _paramLocations[p.BindingInfo.BindingSource.Id],
+                    Optional = p is ControllerParameterDescriptor cpd && cpd.ParameterInfo.HasDefaultValue,
+                })
+                .ToList();
+            svc.Methods.Add(md);
+        }
     }
 }
