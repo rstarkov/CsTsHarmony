@@ -27,23 +27,31 @@ public class AspCoreMvcBuilder
     {
         foreach (var cad in provider.ActionDescriptors.Items.Where(ad => ad.AttributeRouteInfo != null).OfType<ControllerActionDescriptor>())
             addControllerActionDescriptor(cad);
+        RenameDuplicateMethods();
+    }
 
-        // Rename duplicate/overloaded methods
+    public void RenameDuplicateMethods()
+    {
+        // this is needed primarily because Typescript doesn't have overloading, but also because a single method may allow multiple HTTP methods
         foreach (var s in Services)
         {
             var existing = s.Methods.Select(m => m.TsName).ToHashSet();
-            foreach (var grp in s.Methods.GroupBy(g => g.TsName).Where(g => g.Count() > 1))
+            string unique(string name)
             {
-                var methods = grp.ToList();
+                if (!existing.Contains(name))
+                    return name;
                 int num = 1;
-                foreach (var method in methods)
+                while (existing.Contains($"{name}_{num}"))
+                    num++;
+                return $"{name}_{num}";
+            }
+
+            foreach (var grp in s.Methods.GroupBy(m => m.TsName).Where(g => g.Count() > 1))
+                foreach (var method in grp)
                 {
-                    while (existing.Contains($"{grp.Key}_{num}"))
-                        num++;
-                    method.TsName = $"{grp.Key}_{num}";
+                    method.TsName = unique(method.TsName + method.HttpMethod[..1].ToUpper() + method.HttpMethod[1..].ToLower());
                     existing.Add(method.TsName);
                 }
-            }
         }
     }
 
