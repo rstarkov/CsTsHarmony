@@ -20,7 +20,7 @@ public class JsonTypeBuilder : ITypeBuilder
     private Dictionary<Type, TypeDesc> _types = new(); // also contains null values for types that can't be mapped
     public IEnumerable<TypeDesc> Types => _types.Values.Where(t => t != null);
 
-    public JsonTypeBuilder()
+    public void ConfigureForTs()
     {
         ConfigureBasicType(typeof(void), "void");
         ConfigureBasicType(typeof(object), "any");
@@ -68,8 +68,13 @@ public class JsonTypeBuilder : ITypeBuilder
     {
         type = HarmonyUtil.UnwrapType(type);
         if (!_types.ContainsKey(type))
-            _types[type] = MapBasicType(type) ?? MapArrayType(type) ?? MapNullableType(type) ?? MapEnumType(type) ?? MapCompositeType(type); // or null
+            _types[type] = MapType(type); // can be null
         return _types[type];
+    }
+
+    protected virtual TypeDesc MapType(Type type)
+    {
+        return MapBasicType(type) ?? MapArrayType(type) ?? MapNullableType(type) ?? MapEnumType(type) ?? MapCompositeType(type); // or null
     }
 
     protected virtual TypeDesc MapBasicType(Type type)

@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 namespace CsTsHarmony;
 
@@ -124,30 +124,28 @@ public class CsTestClientGenerator
 
     private string getCs(TypeDesc type)
     {
-        if (type is BasicTypeDesc bt) return bt.TgtType;
-        else throw new Exception($"This generator expects all types to be {nameof(BasicTypeDesc)} - as produced by {nameof(CsTestClientGenerator)}.{nameof(TypeBuilder)}");
+        if (type is BasicTypeDesc bt)
+            return bt.TgtType;
+        else if (type is NullableTypeDesc nt)
+            return getCs(nt.ElementType) + "?";
+        else if (type is ArrayTypeDesc at)
+            return getCs(at.ElementType) + "[]";
+        else
+            throw new Exception($"This simplified generator only supports types as mapped by {nameof(CsTestClientGenerator)}.{nameof(TypeBuilder)}");
     }
 
-    public class TypeBuilder : ITypeBuilder
+    public class TypeBuilder : JsonTypeBuilder
     {
-        public TypeDesc AddType(Type type)
+        protected override TypeDesc MapType(Type type)
         {
-            type = HarmonyUtil.UnwrapType(type);
-            return new BasicTypeDesc(type, stringify(type));
+            return MapArrayType(type) ?? MapNullableType(type) ?? new BasicTypeDesc(type, basicType(type));
         }
 
-        private string stringify(Type type)
+        private string basicType(Type type)
         {
             if (type == typeof(void)) return "void";
             if (type == typeof(string)) return "string";
             if (type == typeof(int)) return "int";
-            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
-                return stringify(type.GetGenericArguments()[0]) + "?";
-            if (type.IsInterface && type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
-                return $"{stringify(type.GetGenericArguments()[0])}[]";
-            var ts = type.GetInterfaces().Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>)).ToList();
-            if (ts.Count == 1)
-                return $"{stringify(ts.FirstOrDefault()?.GetGenericArguments()[0])}[]";
             return $"{type.Namespace}.{type.Name}";
         }
     }
