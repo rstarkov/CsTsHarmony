@@ -1,10 +1,13 @@
 ﻿using System.Reflection;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Infrastructure;
 
 namespace CsTsHarmony;
 
-public class JsonTypeBuilder
+public interface ITypeBuilder
+{
+    TypeDesc AddType(Type type);
+}
+
+public class JsonTypeBuilder : ITypeBuilder
 {
     public Dictionary<Type, BasicTypeDesc> BasicTypeMap { get; set; } = new();
 

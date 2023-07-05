@@ -66,7 +66,12 @@ public class CsTestClientGenerator
                 writer.WriteLine();
                 foreach (var method in svc.Methods.OrderBy(m => m.TgtName))
                 {
-                    writer.Write($"public {getCsTaskType(method.ReturnType)} {method.TgtName}(");
+                    var fetcher = method.Fetcher[..1].ToUpper() + method.Fetcher[1..];
+                    if (fetcher == "FetchJson")
+                        fetcher = $"FetchJson<{getCs(method.ReturnType)}>";
+                    var returnType = fetcher == "FetchVoid" ? "Task" : $"Task<{getCs(method.ReturnType)}>";
+
+                    writer.Write($"public {returnType} {method.TgtName}(");
                     writer.Write(getMethodParams(method.Parameters));
                     writer.WriteLine(")");
                     writer.WriteLine("{");
@@ -93,10 +98,7 @@ public class CsTestClientGenerator
                                 throw new Exception($"Unexpected {nameof(method.BodyEncoding)}: {method.BodyEncoding}");
                         }
 
-                        var getter = method.Fetcher[..1].ToUpper() + method.Fetcher[1..];
-                        if (getter == "FetchJson")
-                            getter = $"FetchJson<{method.ReturnType}>";
-                        writer.WriteLine($"return {getter}(url, \"{method.HttpMethod}\", {content});");
+                        writer.WriteLine($"return {fetcher}(url, \"{method.HttpMethod}\", {content});");
                     }
                     writer.WriteLine("}");
                 }
@@ -120,17 +122,33 @@ public class CsTestClientGenerator
         return sb.ToString();
     }
 
-    private string getCsTaskType(TypeDesc type)
-    {
-        if (type.SrcType == typeof(void)) return "Task";
-        return $"Task<{getCs(type)}>";
-    }
-
     private string getCs(TypeDesc type)
     {
-        if (type.SrcType == typeof(void)) return "void";
-        if (type.SrcType == typeof(string)) return "string";
-        if (type.SrcType == typeof(int)) return "int";
-        return type.ToString();
+        if (type is BasicTypeDesc bt) return bt.TgtType;
+        else throw new Exception($"This generator expects all types to be {nameof(BasicTypeDesc)} - as produced by {nameof(CsTestClientGenerator)}.{nameof(TypeBuilder)}");
+    }
+
+    public class TypeBuilder : ITypeBuilder
+    {
+        public TypeDesc AddType(Type type)
+        {
+            type = HarmonyUtil.UnwrapType(type);
+            return new BasicTypeDesc(type, stringify(type));
+        }
+
+        private string stringify(Type type)
+        {
+            if (type == typeof(void)) return "void";
+            if (type == typeof(string)) return "string";
+            if (type == typeof(int)) return "int";
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
+                return stringify(type.GetGenericArguments()[0]) + "?";
+            if (type.IsInterface && type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+                return $"{stringify(type.GetGenericArguments()[0])}[]";
+            var ts = type.GetInterfaces().Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>)).ToList();
+            if (ts.Count == 1)
+                return $"{stringify(ts.FirstOrDefault()?.GetGenericArguments()[0])}[]";
+            return $"{type.Namespace}.{type.Name}";
+        }
     }
 }

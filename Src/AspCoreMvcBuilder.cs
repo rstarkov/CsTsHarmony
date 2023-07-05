@@ -10,14 +10,18 @@ namespace CsTsHarmony;
 public class AspCoreMvcBuilder
 {
     public List<ServiceDesc> Services = new();
-    public JsonTypeBuilder TypeBuilder;
     public IgnoreConfig<Type> IgnoreControllers = new();
     public IgnoreConfig<MethodInfo> IgnoreMethods = new();
     public Func<Type, string> GetFetcher = t => t == typeof(void) ? "fetchVoid" : t == typeof(string) ? "fetchString" : "fetchJson";
-
     public Func<string, string> ControllerRenamer = name => name.Replace("Controller", "");
-
     public List<string> DiagnosticLog = new();
+
+    private ITypeBuilder _typeBuilder;
+
+    public AspCoreMvcBuilder(ITypeBuilder typeBuilder)
+    {
+        _typeBuilder = typeBuilder;
+    }
 
     public void AddControllers(IServiceProvider serviceProvider)
     {
@@ -90,7 +94,7 @@ public class AspCoreMvcBuilder
             {
                 TgtName = cad.ActionName,
                 HttpMethod = httpMethod,
-                ReturnType = TypeBuilder.AddType(cad.MethodInfo.ReturnType),
+                ReturnType = _typeBuilder.AddType(cad.MethodInfo.ReturnType),
                 UrlTemplate = TemplateParser.Parse(cad.AttributeRouteInfo.Template),
                 BodyEncoding = BodyEncoding.Json,
                 Fetcher = GetFetcher(HarmonyUtil.UnwrapType(cad.MethodInfo.ReturnType)),
@@ -107,7 +111,7 @@ public class AspCoreMvcBuilder
                 {
                     TgtName = p.Name,
                     RequestName = p.Name,
-                    Type = TypeBuilder.AddType(p.ParameterType),
+                    Type = _typeBuilder.AddType(p.ParameterType),
                     Location = _paramLocations[p.BindingInfo.BindingSource.Id],
                     Optional = p is ControllerParameterDescriptor cpd && cpd.ParameterInfo.HasDefaultValue,
                 })
