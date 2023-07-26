@@ -146,6 +146,7 @@ public class CsTestClientGenerator
             if (type == typeof(void)) return "void";
             if (type == typeof(string)) return "string";
             if (type == typeof(int)) return "int";
+            if (type == typeof(bool)) return "bool";
             return $"{type.Namespace}.{type.Name}";
         }
     }
