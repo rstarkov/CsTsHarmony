@@ -39,7 +39,25 @@ public class TsServiceGenerator
             OutputService(writer, svc);
             writer.WriteLine();
         }
+        OutputHelpers(writer);
         ConverterManager.OutputTypeConverters(writer);
+    }
+
+    protected void OutputHelpers(TypeScriptWriter writer)
+    {
+        writer.WriteLine("""
+            function buildUrl(path: string, query: { [k: string]: any }): string {
+                const qparts = Object.keys(query).filter(k => query[k] !== undefined && query[k] !== null).map(k => `${k}=${encodeURIComponent('' + query[k])}`);
+                let result = path;
+                let sep = "?";
+                for (const qpart of qparts) {
+                    result += sep + qpart;
+                    sep = "&";
+                }
+                return result;
+            }
+            """);
+        writer.WriteLine();
     }
 
     protected void OutputService(TypeScriptWriter writer, ServiceDesc s)
@@ -48,6 +66,7 @@ public class TsServiceGenerator
         writer.WriteLine();
         using (writer.Indent())
         {
+#if false // In order to expose public "endpoints" we must call type converters on the input parameters. This code below doesn't do that, so for now we build the endpoint directly in each method.
             writer.WriteLine("public endpoints = {");
             using (writer.Indent())
             {
@@ -59,6 +78,7 @@ public class TsServiceGenerator
             }
             writer.WriteLine("};");
             writer.WriteLine();
+#endif
             writer.WriteLine($"public constructor(options?: {ServiceOptionsType}) {{");
             using (writer.Indent())
             {
@@ -78,11 +98,14 @@ public class TsServiceGenerator
                 writer.WriteLine($"): {string.Format(ReturnTypeTemplate, TypeScriptWriter.TypeSignature(method.ReturnType, ""))} {{");
                 using (writer.Indent())
                 {
-                    writer.WriteLine($"let url = this.endpoints.{method.TgtName}({method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString).Select(p => p.TgtName).JoinString(", ")});");
+                    //writer.WriteLine($"let url = this.endpoints.{method.TgtName}({method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString).Select(p => p.TgtName).JoinString(", ")});");
 
                     // Output parameter type conversions
                     foreach (var p in method.Parameters)
                         ConverterManager.OutputTypeConversion(writer, p.TgtName, p.Type, toTypeScript: false);
+
+                    // Build URL
+                    writer.WriteLine($"let url = {BuildUrlCall(method)};");
 
                     // Build request body
                     var bodyParams = method.Parameters.Where(p => p.Location == ParameterLocation.RequestBody).OrderBy(p => p.TgtName).ToList();
@@ -136,6 +159,39 @@ public class TsServiceGenerator
             }
         }
         writer.WriteLine("}");
+    }
+
+    protected string BuildUrlCall(MethodDesc method)
+    {
+        var result = new StringBuilder();
+        result.Append("buildUrl(`");
+        bool first = true;
+        foreach (var segment in method.UrlTemplate.Segments)
+        {
+            if (first)
+                first = false;
+            else
+                result.Append('/');
+            if (!segment.IsSimple)
+                throw new NotImplementedException(); // need a test case to implement this
+            if (segment.Parts[0].IsLiteral)
+                result.Append(segment.Parts[0].Text);
+            else if (segment.Parts[0].IsParameter)
+                result.Append("${encodeURIComponent('' + " + segment.Parts[0].Name + ")}");
+            else
+                throw new NotImplementedException(); // need a test case to implement this
+        }
+        first = true;
+        result.Append("`, {");
+        foreach (var p in method.Parameters.Where(p => p.Location == ParameterLocation.QueryString).OrderBy(p => p.RequestName))
+        {
+            result.Append(first ? " " : ", ");
+            result.Append(p.RequestName == p.TgtName ? p.RequestName : $"{p.RequestName}: {p.TgtName}");
+            first = false;
+        }
+        if (!first) result.Append(' ');
+        result.Append("})");
+        return result.ToString();
     }
 
     private string getMethodParams(IEnumerable<MethodParameterDesc> parameters)
