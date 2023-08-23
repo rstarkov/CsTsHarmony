@@ -11,7 +11,6 @@ public class TsServiceGenerator
     public string ServiceClassExtends = "ApiServiceBase";
     public string ServiceOptionsType = "ApiServiceOptions";
     public string ImportFrom = null;
-    public string ReturnTypeTemplate = "Promise<{0}>";
 
     public void Output(TypeScriptWriter writer, IEnumerable<ServiceDesc> services)
     {
@@ -21,14 +20,19 @@ public class TsServiceGenerator
         writer.WriteLine($"export class {ServicesClassName} {{");
         using (writer.Indent())
         {
+            writer.WriteLine($"public options: {ServiceOptionsType} = {{}};");
+            writer.WriteLine();
             foreach (var svc in services.OrderBy(s => s.TgtName))
                 writer.WriteLine($"public readonly {svc.TgtName}: {ServiceClassName(svc.TgtName)};");
             writer.WriteLine();
             writer.WriteLine($"public constructor(options?: {ServiceOptionsType}) {{");
             using (writer.Indent())
             {
+                writer.WriteLine("if (options)");
+                using (writer.Indent())
+                    writer.WriteLine("this.options = options;");
                 foreach (var svc in services.OrderBy(s => s.TgtName))
-                    writer.WriteLine($"this.{svc.TgtName} = new {ServiceClassName(svc.TgtName)}(options);");
+                    writer.WriteLine($"this.{svc.TgtName} = new {ServiceClassName(svc.TgtName)}(this);");
             }
             writer.WriteLine("}");
         }
@@ -79,10 +83,10 @@ public class TsServiceGenerator
             writer.WriteLine("};");
             writer.WriteLine();
 #endif
-            writer.WriteLine($"public constructor(options?: {ServiceOptionsType}) {{");
+            writer.WriteLine($"public constructor(services: {{ options: {ServiceOptionsType} }}) {{");
             using (writer.Indent())
             {
-                writer.WriteLine("super(options);");
+                writer.WriteLine("super(services);");
                 writer.WriteLine();
 
                 foreach (var method in s.Methods.OrderBy(m => m.TgtName))
@@ -95,7 +99,7 @@ public class TsServiceGenerator
                 bool canDirectReturn = !ConverterManager.NeedsConversion(method.ReturnType);
                 writer.Write($"public {(canDirectReturn ? "" : "async ")}{method.TgtName}(");
                 writer.Write(getMethodParams(method.Parameters));
-                writer.WriteLine($"): {string.Format(ReturnTypeTemplate, TypeScriptWriter.TypeSignature(method.ReturnType, ""))} {{");
+                writer.WriteLine($"): Promise<{TypeScriptWriter.TypeSignature(method.ReturnType, "")}> {{");
                 using (writer.Indent())
                 {
                     //writer.WriteLine($"let url = this.endpoints.{method.TgtName}({method.Parameters.Where(p => p.Location is ParameterLocation.UrlSegment or ParameterLocation.QueryString).Select(p => p.TgtName).JoinString(", ")});");
@@ -143,9 +147,9 @@ public class TsServiceGenerator
 
                     // Output call
                     if (canDirectReturn)
-                        writer.WriteLine($"return this.{method.Fetcher}(url, {{ {fetchOpts} }}) as Promise<{TypeScriptWriter.TypeSignature(method.ReturnType, "")}>;");
+                        writer.WriteLine($"return this.{method.Fetcher}(url, {{ {fetchOpts} }}, opts) as Promise<{TypeScriptWriter.TypeSignature(method.ReturnType, "")}>;");
                     else
-                        writer.WriteLine($"let result = await this.{method.Fetcher}(url, {{ {fetchOpts} }}) as {TypeScriptWriter.TypeSignature(method.ReturnType, "")};");
+                        writer.WriteLine($"let result = await this.{method.Fetcher}(url, {{ {fetchOpts} }}, opts) as {TypeScriptWriter.TypeSignature(method.ReturnType, "")};");
 
                     if (!canDirectReturn)
                     {
@@ -205,6 +209,9 @@ public class TsServiceGenerator
             sb.Append($"{p.TgtName}{(p.Optional ? "?" : "")}: {TypeScriptWriter.TypeSignature(p.Type, "")}");
             first = false;
         }
+        if (!first)
+            sb.Append(", ");
+        sb.Append($"opts?: {ServiceOptionsType}");
         return sb.ToString();
     }
 }
