@@ -10,6 +10,8 @@ public class CsTestClientGenerator
     public string ClassAccessibility = "internal";
     public string Namespace = null;
     public string ServicesClass = "ApiServices";
+    public string ServiceBaseClass = "ApiServiceBase";
+    public string ServiceOptionsClass = "ApiServiceOptions";
 
     public void Output(string filename, IEnumerable<ServiceDesc> services)
     {
@@ -35,7 +37,7 @@ public class CsTestClientGenerator
             foreach (var svc in services)
                 writer.WriteLine($"public {svc.TgtName}Service {svc.TgtName};");
             writer.WriteLine();
-            writer.WriteLine($"public {ServicesClass}(ApiServiceOptions options)");
+            writer.WriteLine($"public {ServicesClass}({ServiceOptionsClass} options)");
             writer.WriteLine("{");
             using (writer.Indent())
                 foreach (var svc in services)
@@ -47,7 +49,7 @@ public class CsTestClientGenerator
 
         foreach (var svc in services)
         {
-            writer.WriteLine($"{ClassAccessibility} class {svc.TgtName}Service : ApiServiceBase");
+            writer.WriteLine($"{ClassAccessibility} class {svc.TgtName}Service : {ServiceBaseClass}");
             writer.WriteLine("{");
             using (writer.Indent())
             {
@@ -60,7 +62,7 @@ public class CsTestClientGenerator
                 }
                 writer.WriteLine("}");
                 writer.WriteLine();
-                writer.WriteLine($"public {svc.TgtName}Service(ApiServiceOptions options) : base(options)");
+                writer.WriteLine($"public {svc.TgtName}Service({ServiceOptionsClass} options) : base(options)");
                 writer.WriteLine("{");
                 writer.WriteLine("}");
                 writer.WriteLine();
