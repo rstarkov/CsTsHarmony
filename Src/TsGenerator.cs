@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System;
+using System.Text;
 
 namespace CsTsHarmony;
 
@@ -360,23 +361,29 @@ public class TsTypeConverterManager
     private TypeConverter getConverter(TypeDesc type)
     {
         var key = GetConverterName(type);
-        if (_typeConverters.TryGetValue(key, out var converter))
-            return converter;
+        if (_typeConverters.ContainsKey(key))
+            return _typeConverters[key];
 
-        converter = new TypeConverter { ForType = type };
-        // there must be no early returns below; we must populate this converter and add it to the dictionary
+        // the code below must add converter to _typeConverters prior to making any recursive calls to getConverter. The value returned must be the value stored in _typeConverters[key]
 
         if (type is NullableTypeDesc nt)
-            converter = getConverter(nt.ElementType);
+        {
+            _typeConverters[key] = getConverter(nt.ElementType);
+            return _typeConverters[key];
+        }
         else if (type is ArrayTypeDesc at)
         {
+            _typeConverters[key] = new TypeConverter { ForType = type }; // provisional
             var elConverter = getConverter(at.ElementType);
             if (elConverter == null)
-                converter = null;
+            {
+                _typeConverters[key] = null;
+                return null;
+            }
             else
             {
-                converter.UsesConverters.Add(elConverter);
-                converter.WriteFunctionBody = (writer, toTypeScript) =>
+                _typeConverters[key].UsesConverters.Add(elConverter);
+                _typeConverters[key].WriteFunctionBody = (writer, toTypeScript) =>
                 {
                     writer.WriteLine("for (let i = 0; i < val.length; i++)");
                     using (writer.Indent())
@@ -387,38 +394,49 @@ public class TsTypeConverterManager
                     }
                     writer.WriteLine("return val;");
                 };
+                return _typeConverters[key];
             }
         }
         else if (type is BasicTypeDesc bt)
         {
             if (bt.TsConverter == null)
-                converter = null;
+            {
+                _typeConverters[key] = null;
+                return null;
+            }
             else
             {
-                converter.WriteFunctionBody = (writer, toTypeScript) =>
+                _typeConverters[key] = new TypeConverter { ForType = type };
+                _typeConverters[key].WriteFunctionBody = (writer, toTypeScript) =>
                 {
                     if (!toTypeScript)
                         writer.WriteLine($"return {bt.TsConverter.ConvertFromTypeScript("val")};");
                     else
                         writer.WriteLine($"return {bt.TsConverter.ConvertToTypeScript("val")};");
                 };
+                return _typeConverters[key];
             }
         }
         else if (type is EnumTypeDesc et)
         {
             // TODO: Flags
-            converter = null;
+            _typeConverters[key] = null;
+            return null;
         }
         else if (type is CompositeTypeDesc ct)
         {
+            _typeConverters[key] = new TypeConverter { ForType = type }; // provisional
             var propConverters = ct.Properties.Select(p => new { prop = p, conv = getConverter(p.Type) }).Where(x => x.conv != null).ToList();
             if (propConverters.Count == 0)
-                converter = null;
+            {
+                _typeConverters[key] = null;
+                return null;
+            }
             else
             {
                 foreach (var pc in propConverters)
-                    converter.UsesConverters.Add(pc.conv);
-                converter.WriteFunctionBody = (writer, toTypeScript) =>
+                    _typeConverters[key].UsesConverters.Add(pc.conv);
+                _typeConverters[key].WriteFunctionBody = (writer, toTypeScript) =>
                 {
                     foreach (var pc in propConverters)
                     {
@@ -428,13 +446,11 @@ public class TsTypeConverterManager
                     }
                     writer.WriteLine("return val;");
                 };
+                return _typeConverters[key];
             }
         }
         else
             throw new Exception();
-
-        _typeConverters[key] = converter;
-        return converter;
     }
 
     protected virtual string DecorateConverterName(string name, bool toTypeScript)

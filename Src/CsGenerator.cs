@@ -138,9 +138,11 @@ public class CsTestClientGenerator
 
     public class TypeBuilder : JsonTypeBuilder
     {
-        protected override TypeDesc MapType(Type type)
+        protected override void MapType(Type type)
         {
-            return MapArrayType(type) ?? MapNullableType(type) ?? new BasicTypeDesc(type, basicType(type));
+            if (MapArrayType(type)) return;
+            if (MapNullableType(type)) return;
+            _types[type] = new BasicTypeDesc(type, basicType(type));
         }
 
         private string basicType(Type type)

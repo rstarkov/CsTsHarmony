@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 
 namespace CsTsHarmony;
 
@@ -17,7 +17,7 @@ public class JsonTypeBuilder : ITypeBuilder
     public BindingFlags FieldBindingFlags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly;
     public HashSet<Type> DescendantCandidates = new();
 
-    private Dictionary<Type, TypeDesc> _types = new(); // also contains null values for types that can't be mapped
+    protected Dictionary<Type, TypeDesc> _types = new(); // also contains null values for types that can't be mapped
     public IEnumerable<TypeDesc> Types => _types.Values.Where(t => t != null);
 
     public void ConfigureForTs()
@@ -68,71 +68,104 @@ public class JsonTypeBuilder : ITypeBuilder
     {
         type = HarmonyUtil.UnwrapType(type);
         if (!_types.ContainsKey(type))
-            _types[type] = MapType(type); // can be null
+            MapType(type);
         return _types[type];
     }
 
-    protected virtual TypeDesc MapType(Type type)
+    /// <summary>
+    ///     Maps the type and stores the result in `_types[type]`. Stores null if the type cannot be mapped. Called only for
+    ///     types that don't exist in `_types`. Must store the final TypeDesc instance before making any calls to AddType.</summary>
+    protected virtual void MapType(Type type)
     {
-        return MapBasicType(type) ?? MapArrayType(type) ?? MapNullableType(type) ?? MapEnumType(type) ?? MapCompositeType(type); // or null
+        if (MapBasicType(type)) return;
+        if (MapArrayType(type)) return;
+        if (MapNullableType(type)) return;
+        if (MapEnumType(type)) return;
+        if (MapCompositeType(type)) return;
+        _types[type] = null;
     }
 
-    protected virtual TypeDesc MapBasicType(Type type)
+    protected virtual bool MapBasicType(Type type)
     {
         if (BasicTypeMap.TryGetValue(type, out var result))
-            return result;
-        return null;
+        {
+            _types[type] = result;
+            return true;
+        }
+        return false;
     }
 
-    protected virtual TypeDesc MapArrayType(Type type)
+    protected Dictionary<Type, TypeDesc> AddTypeProvisionally(TypeDesc t)
+    {
+        var backup = new Dictionary<Type, TypeDesc>(_types);
+        _types[t.SrcType] = t;
+        return backup;
+    }
+    protected void AddTypeRollback(TypeDesc t, Dictionary<Type, TypeDesc> backup)
+    {
+        _types = backup;
+        _types[t.SrcType] = null;
+    }
+
+    protected virtual bool MapArrayType(Type type)
     {
         if (type == typeof(string))
-            return null;
+            return false;
 
         if (type.IsInterface && type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
         {
-            var t = AddType(type.GetGenericArguments()[0]);
-            if (t == null)
-                return null;
-            return new ArrayTypeDesc(type, t);
+            var at = new ArrayTypeDesc(type, null);
+            var backup = AddTypeProvisionally(at);
+            at.ElementType = AddType(type.GetGenericArguments()[0]);
+            if (at.ElementType == null)
+                AddTypeRollback(at, backup);
+            return true;
         }
 
         var ts = type.GetInterfaces().Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>)).ToList();
         if (ts.Count == 1)
         {
-            var t = AddType(ts.FirstOrDefault()?.GetGenericArguments()[0]);
-            if (t == null)
-                return null;
-            return new ArrayTypeDesc(type, t);
+            var at = new ArrayTypeDesc(type, null);
+            var backup = AddTypeProvisionally(at);
+            at.ElementType = AddType(ts.FirstOrDefault()?.GetGenericArguments()[0]);
+            if (at.ElementType == null)
+                AddTypeRollback(at, backup);
+            return true;
         }
 
-        return null;
+        return false;
     }
 
-    protected virtual TypeDesc MapNullableType(Type type)
+    protected virtual bool MapNullableType(Type type)
     {
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
         {
-            var t = AddType(type.GetGenericArguments()[0]);
-            if (t == null)
-                return null;
-            return new NullableTypeDesc(type, t);
+            var nt = new NullableTypeDesc(type, null);
+            var backup = AddTypeProvisionally(nt);
+            nt.ElementType = AddType(type.GetGenericArguments()[0]);
+            if (nt.ElementType == null)
+                AddTypeRollback(nt, backup);
+            return true;
         }
-        return null;
+        return false;
     }
 
-    protected virtual TypeDesc MapEnumType(Type type)
+    protected virtual bool MapEnumType(Type type)
     {
         if (!type.IsEnum)
-            return null;
+            return false;
         var td = new EnumTypeDesc(type);
         td.IsFlags = type.GetCustomAttribute<FlagsAttribute>() != null;
         td.Values = type.GetEnumValues().Cast<object>().Select(v => new EnumValueDesc(td) { Value = Convert.ToInt64(v), Name = v.ToString() }).ToList();
-        return td;
+        _types[type] = td;
+        return true;
     }
 
-    protected virtual TypeDesc MapCompositeType(Type type)
+    protected virtual bool MapCompositeType(Type type)
     {
+        var ct = new CompositeTypeDesc(type);
+        _types[type] = ct; // this method doesn't need to roll back because it will always complete: any failures to map are removed from the composite type member list instead
+
         // Look for descendants of this type - including types that implement an interface
         if (DescendantCandidates.Contains(type))
         {
@@ -141,7 +174,6 @@ public class JsonTypeBuilder : ITypeBuilder
                 AddType(d);
         }
 
-        var ct = new CompositeTypeDesc(type);
         foreach (var prop in type.GetProperties(PropertyBindingFlags))
         {
             if (!IgnoreProperties.Include(prop))
@@ -175,6 +207,7 @@ public class JsonTypeBuilder : ITypeBuilder
             ct.Extends.Add((CompositeTypeDesc)AddType(i));
         // Remove unmappable types
         ct.Extends.RemoveAll(t => t == null);
-        return ct;
+
+        return true;
     }
 }
