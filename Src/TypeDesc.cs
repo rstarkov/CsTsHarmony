@@ -102,7 +102,8 @@ public class CompositeTypeDesc : TypeDesc, IDeclaredTypeDesc
 public class PropertyDesc
 {
     public string Name;
-    public TypeDesc Type;
+    public TypeDesc Type; // NullableTypeDesc gets unwrapped, so the top level is never a NullableTypeDesc
+    public bool? Nullable; // null means unknown, which only happens for reference types
 
     public override string ToString() => $"{Name}: {Type}";
 }

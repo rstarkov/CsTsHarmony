@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 
 namespace CsTsHarmony;
 
@@ -174,13 +174,21 @@ public class JsonTypeBuilder : ITypeBuilder
                 AddType(d);
         }
 
+        PropertyDesc makePropertyDesc(string name, TypeDesc proptype, NullabilityInfo nullability)
+        {
+            var desc = new PropertyDesc { Name = name, Type = proptype };
+            desc.Nullable = nullability.WriteState == NullabilityState.Nullable ? true : nullability.WriteState == NullabilityState.NotNull ? false : null;
+            if (desc.Nullable == true && proptype is NullableTypeDesc nt)
+                desc.Type = nt.ElementType;
+            return desc;
+        }
         foreach (var prop in type.GetProperties(PropertyBindingFlags))
         {
             if (!IgnoreProperties.Include(prop))
                 continue;
             var proptype = AddType(prop.PropertyType);
             if (proptype != null)
-                ct.Properties.Add(new PropertyDesc { Name = prop.Name, Type = proptype });
+                ct.Properties.Add(makePropertyDesc(prop.Name, proptype, new NullabilityInfoContext().Create(prop)));
             else
                 IgnoreProperties.Ignored.Add(prop);
         }
@@ -190,7 +198,7 @@ public class JsonTypeBuilder : ITypeBuilder
                 continue;
             var fieldtype = AddType(field.FieldType);
             if (fieldtype != null)
-                ct.Properties.Add(new PropertyDesc { Name = field.Name, Type = fieldtype });
+                ct.Properties.Add(makePropertyDesc(field.Name, fieldtype, new NullabilityInfoContext().Create(field)));
             else
                 IgnoreFields.Ignored.Add(field);
         }

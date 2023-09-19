@@ -1,4 +1,3 @@
-﻿using System;
 using System.Text;
 
 namespace CsTsHarmony;
@@ -219,6 +218,11 @@ public class TsServiceGenerator
 
 public class TsTypeGenerator
 {
+    /// <summary>
+    ///     If false, nullable properties are emitted as optional and may only be value|undefined. If true, they are emitted
+    ///     as required value|null properties.</summary>
+    public bool NullSerializedToJson = false;
+
     private List<TypeDesc> _types;
 
     public TsTypeGenerator(IEnumerable<TypeDesc> types)
@@ -288,7 +292,13 @@ public class TsTypeGenerator
         using (writer.Indent())
         {
             foreach (var prop in ct.Properties.OrderBy(p => p.Name))
-                writer.WriteLine($"{prop.Name}: {TypeScriptWriter.TypeSignature(prop.Type, ct.TgtNamespace)};");
+            {
+                // future extensibility: could make it more configurable for how to deal with unknown nullability if a project wants to take that approach
+                bool optional = prop.Nullable != false && !NullSerializedToJson;
+                bool orNull = prop.Nullable != false && NullSerializedToJson;
+                var comment = prop.Nullable == null ? " // unknown nullability" : "";
+                writer.WriteLine($"{prop.Name}{(optional ? "?" : "")}: {TypeScriptWriter.TypeSignature(prop.Type, ct.TgtNamespace)}{(orNull ? " | null" : "")};{comment}");
+            }
         }
         writer.WriteLine("}");
     }
