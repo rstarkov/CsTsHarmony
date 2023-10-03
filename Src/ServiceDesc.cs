@@ -44,13 +44,15 @@ public class MethodParameterDesc
     public string TgtName;
     /// <summary>Name of the parameter as expected by the server. Changing to the wrong value will break the calls.</summary>
     public string RequestName;
+    public ParameterInfo Parameter { get; }
     public MethodDesc Method { get; }
     public TypeDesc Type;
     public ParameterLocation Location;
     public bool Optional;
 
-    public MethodParameterDesc(MethodDesc method)
+    public MethodParameterDesc(ParameterInfo parameter, MethodDesc method)
     {
+        Parameter = parameter;
         Method = method;
     }
 }

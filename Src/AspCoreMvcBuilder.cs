@@ -107,13 +107,14 @@ public class AspCoreMvcBuilder
             }
             md.Parameters = cad.Parameters
                 .Where(p => p.BindingInfo.BindingSource.IsFromRequest)
-                .Select(p => new MethodParameterDesc(md)
+                .Select(p => (ControllerParameterDescriptor)p)
+                .Select(p => new MethodParameterDesc(p.ParameterInfo, md)
                 {
                     TgtName = p.Name,
                     RequestName = p.Name,
                     Type = _typeBuilder.AddType(p.ParameterType),
                     Location = _paramLocations[p.BindingInfo.BindingSource.Id],
-                    Optional = p is ControllerParameterDescriptor cpd && cpd.ParameterInfo.HasDefaultValue,
+                    Optional = p.ParameterInfo.HasDefaultValue,
                 })
                 .ToList();
             svc.Methods.Add(md);
