@@ -177,7 +177,8 @@ public class JsonTypeBuilder : ITypeBuilder
         PropertyDesc makePropertyDesc(string name, TypeDesc proptype, NullabilityInfo nullability)
         {
             var desc = new PropertyDesc { Name = name, Type = proptype };
-            desc.Nullable = nullability.WriteState == NullabilityState.Nullable ? true : nullability.WriteState == NullabilityState.NotNull ? false : null;
+            desc.Nullable = nullability.WriteState == NullabilityState.Nullable ? true : nullability.WriteState == NullabilityState.NotNull ? false
+                : nullability.ReadState == NullabilityState.Nullable ? true : nullability.ReadState == NullabilityState.NotNull ? false : null;
             if (desc.Nullable == true && proptype is NullableTypeDesc nt)
                 desc.Type = nt.ElementType;
             return desc;
