@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 namespace CsTsHarmony;
 
@@ -436,7 +436,7 @@ public class TsTypeConverterManager
         else if (type is CompositeTypeDesc ct)
         {
             _typeConverters[key] = new TypeConverter { ForType = type }; // provisional
-            var propConverters = ct.Properties.Select(p => new { prop = p, conv = getConverter(p.Type) }).Where(x => x.conv != null).ToList();
+            var propConverters = ct.Properties.Select(p => new { prop = p, conv = getConverter(p.Type) }).Where(x => x.conv != null).OrderBy(p => p.prop.Name).ToList();
             if (propConverters.Count == 0)
             {
                 _typeConverters[key] = null;
