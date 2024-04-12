@@ -1,4 +1,4 @@
-﻿namespace CsTsHarmony;
+namespace CsTsHarmony;
 
 public abstract class TypeDesc
 {
@@ -89,6 +89,8 @@ public class CompositeTypeDesc : TypeDesc, IDeclaredTypeDesc
     public string TgtNamespace { get; set; }
     public List<PropertyDesc> Properties = new();
     public List<CompositeTypeDesc> Extends = new();
+    /// <summary>If not null, Base is also present in <see cref="Extends"/>.</summary>
+    public CompositeTypeDesc Base { get; set; }
 
     public override string ToString() => $"{SrcType.FullName} (composite)";
 

@@ -206,7 +206,10 @@ public class JsonTypeBuilder : ITypeBuilder
 
         // Populate Extends: the base type
         if (type.BaseType != null && DescendantCandidates.Contains(type.BaseType))
-            ct.Extends.Add((CompositeTypeDesc)AddType(type.BaseType));
+        {
+            ct.Base = (CompositeTypeDesc)AddType(type.BaseType);
+            ct.Extends.Add(ct.Base);
+        }
         // Populate Extends: interfaces
         var ifaces = type.GetInterfaces().Where(i => DescendantCandidates.Contains(i)).ToHashSet();
         foreach (var i1 in ifaces.ToList()) // exclude interfaces that are inherited via other interfaces

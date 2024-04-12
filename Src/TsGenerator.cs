@@ -437,6 +437,7 @@ public class TsTypeConverterManager
         {
             _typeConverters[key] = new TypeConverter { ForType = type }; // provisional
             var propConverters = ct.Properties.Select(p => new { prop = p, conv = getConverter(p.Type) }).Where(x => x.conv != null).OrderBy(p => p.prop.Name).ToList();
+            var baseConverter = ct.Base == null ? null : getConverter(ct.Base);
             if (propConverters.Count == 0)
             {
                 _typeConverters[key] = null;
@@ -446,6 +447,8 @@ public class TsTypeConverterManager
             {
                 foreach (var pc in propConverters)
                     _typeConverters[key].UsesConverters.Add(pc.conv);
+                if (baseConverter != null)
+                    _typeConverters[key].UsesConverters.Add(baseConverter);
                 _typeConverters[key].WriteFunctionBody = (writer, toTypeScript) =>
                 {
                     foreach (var pc in propConverters)
@@ -454,6 +457,10 @@ public class TsTypeConverterManager
                         using (writer.Indent())
                             writer.WriteLine($"val.{pc.prop.Name} = {GetConverterFunctionName(pc.conv.ForType, toTypeScript)}(val.{pc.prop.Name});");
                     }
+                    if (baseConverter != null)
+                        writer.WriteLine($"{GetConverterFunctionName(baseConverter.ForType, toTypeScript)}(val);"); // composite type converters are in-place, so no assignment
+                    // this is not complete; interfaces that implement other interfaces need to convert the properties of the "base" interface too,
+                    // but there might be multiple and we can't convert the same property twice, so those probably just need to convert every property directly in this converter
                     writer.WriteLine("return val;");
                 };
                 return _typeConverters[key];
