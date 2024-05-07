@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ActionConstraints;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
@@ -12,7 +13,7 @@ public class AspCoreMvcBuilder
     public List<ServiceDesc> Services = new();
     public IgnoreConfig<Type> IgnoreControllers = new();
     public IgnoreConfig<MethodInfo> IgnoreMethods = new();
-    public Func<Type, string> GetFetcher = t => t == typeof(void) ? "fetchVoid" : t == typeof(string) ? "fetchString" : "fetchJson";
+    public Func<Type, string> GetFetcher = t => t == typeof(void) ? "fetchVoid" : t == typeof(string) ? "fetchString" : t == typeof(FileResult) ? "fetchFile" : "fetchJson";
     public Func<string, string> ControllerRenamer = name => name.Replace("Controller", "");
     public List<string> DiagnosticLog = new();
 
@@ -97,7 +98,7 @@ public class AspCoreMvcBuilder
                 ReturnType = _typeBuilder.AddType(cad.MethodInfo.ReturnType),
                 UrlTemplate = TemplateParser.Parse(cad.AttributeRouteInfo.Template),
                 BodyEncoding = BodyEncoding.Json,
-                Fetcher = GetFetcher(HarmonyUtil.UnwrapType(cad.MethodInfo.ReturnType)),
+                Fetcher = GetFetcher(HarmonyUtil.UnwrapType(cad.MethodInfo.ReturnType, preserveActionResults: true)),
             };
             var badParam = cad.Parameters.FirstOrDefault(p => p.BindingInfo.BindingSource.IsFromRequest && !_paramLocations.ContainsKey(p.BindingInfo.BindingSource.Id));
             if (badParam != null)

@@ -35,12 +35,15 @@ public static class HarmonyUtil
         return url.ToString();
     }
 
-    public static Type UnwrapType(Type type)
+    public static Type UnwrapType(Type type, bool preserveActionResults = false)
     {
         if (type == typeof(Task))
             type = typeof(void);
         else if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Task<>))
             type = type.GetGenericArguments()[0];
+
+        if (preserveActionResults)
+            return type;
 
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ActionResult<>))
             type = type.GetGenericArguments()[0];
