@@ -35,7 +35,7 @@ public class CsTestClientGenerator
         using (writer.Indent())
         {
             foreach (var svc in services)
-                writer.WriteLine($"public {svc.TgtName}Service {svc.TgtName};");
+                writer.WriteLine($"public {svc.TgtTypeName(svc.TgtName)} {svc.TgtName};");
             writer.WriteLine();
             writer.WriteLine($"public {ServicesClass}({ServiceOptionsClass} options)");
             writer.WriteLine("{");
@@ -49,7 +49,7 @@ public class CsTestClientGenerator
 
         foreach (var svc in services)
         {
-            writer.WriteLine($"{ClassAccessibility} class {svc.TgtName}Service : {ServiceBaseClass}");
+            writer.WriteLine($"{ClassAccessibility} class {svc.TgtTypeName(svc.TgtName)} : {ServiceBaseClass}");
             writer.WriteLine("{");
             using (writer.Indent())
             {
@@ -62,7 +62,7 @@ public class CsTestClientGenerator
                 }
                 writer.WriteLine("}");
                 writer.WriteLine();
-                writer.WriteLine($"public {svc.TgtName}Service({ServiceOptionsClass} options) : base(options)");
+                writer.WriteLine($"public {svc.TgtTypeName(svc.TgtName)}({ServiceOptionsClass} options) : base(options)");
                 writer.WriteLine("{");
                 writer.WriteLine("}");
                 writer.WriteLine();

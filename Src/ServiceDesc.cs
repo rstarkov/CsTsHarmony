@@ -6,6 +6,7 @@ namespace CsTsHarmony;
 public class ServiceDesc
 {
     public string TgtName;
+    public Func<string, string> TgtTypeName = tgtName => $"{tgtName}Service";
     public Type ControllerType { get; }
     public List<MethodDesc> Methods = new();
 
