@@ -7,7 +7,6 @@ public class TsServiceGenerator
     public TsTypeConverterManager ConverterManager = new();
     public HashSet<string> Imports = new();
     public string ServicesClassName = "Services";
-    public Func<string, string> ServiceClassName = n => n + "Service";
     public string ServiceClassExtends = "ApiServiceBase";
     public string ServiceOptionsType = "ApiServiceOptions";
     public string ImportFrom = null;
@@ -23,7 +22,7 @@ public class TsServiceGenerator
             writer.WriteLine($"public options: {ServiceOptionsType} = {{}};");
             writer.WriteLine();
             foreach (var svc in services.OrderBy(s => s.TgtName))
-                writer.WriteLine($"public readonly {svc.TgtName}: {ServiceClassName(svc.TgtName)};");
+                writer.WriteLine($"public readonly {svc.TgtName}: {svc.TgtTypeName(svc.TgtName)};");
             writer.WriteLine();
             writer.WriteLine($"public constructor(options?: {ServiceOptionsType}) {{");
             using (writer.Indent())
@@ -32,7 +31,7 @@ public class TsServiceGenerator
                 using (writer.Indent())
                     writer.WriteLine("this.options = options;");
                 foreach (var svc in services.OrderBy(s => s.TgtName))
-                    writer.WriteLine($"this.{svc.TgtName} = new {ServiceClassName(svc.TgtName)}(this);");
+                    writer.WriteLine($"this.{svc.TgtName} = new {svc.TgtTypeName(svc.TgtName)}(this);");
             }
             writer.WriteLine("}");
         }
@@ -66,7 +65,7 @@ public class TsServiceGenerator
 
     protected void OutputService(TypeScriptWriter writer, ServiceDesc s)
     {
-        writer.WriteLine($"export class {ServiceClassName(s.TgtName)}{(ServiceClassExtends == null ? "" : $" extends {ServiceClassExtends}")} {{");
+        writer.WriteLine($"export class {s.TgtTypeName(s.TgtName)}{(ServiceClassExtends == null ? "" : $" extends {ServiceClassExtends}")} {{");
         writer.WriteLine();
         using (writer.Indent())
         {
