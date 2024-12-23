@@ -437,7 +437,7 @@ public class TsTypeConverterManager
             _typeConverters[key] = new TypeConverter { ForType = type }; // provisional
             var propConverters = ct.Properties.Select(p => new { prop = p, conv = getConverter(p.Type) }).Where(x => x.conv != null).OrderBy(p => p.prop.Name).ToList();
             var baseConverter = ct.Base == null ? null : getConverter(ct.Base);
-            if (propConverters.Count == 0)
+            if (propConverters.Count == 0 && baseConverter == null)
             {
                 _typeConverters[key] = null;
                 return null;
